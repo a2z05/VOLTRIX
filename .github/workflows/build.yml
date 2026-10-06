@@ -45,12 +45,20 @@ jobs:
             echo "discovered platform package: $P"
             "$SDKMANAGER" "platform-tools" "$P" "build-tools;37.0.0"
           fi
-          # Sync build.gradle to the platform/build-tools dirs that ACTUALLY exist on disk,
-          # so AGP resolves them by the exact installed name (android-37 vs android-37.0 etc).
-          PLAT=$( (ls -1 "$ANDROID_HOME/platforms" || true) | sed -n 's/^android-\([0-9][0-9.]*\)$/\1/p' | sort -V | tail -1)
+          # compileSdk in the template is the INTEGER 37 and must stay an integer:
+          # a dotted string ("37.2") silently casts to null in Groovy and AGP throws
+          # "Value is null". If the SDK only published versioned dirs (android-37.0),
+          # also expose the plain name AGP may look up for int 37.
+          if [ ! -e "$ANDROID_HOME/platforms/android-37" ]; then
+            SRC=$( (ls -1d "$ANDROID_HOME"/platforms/android-37.* 2>/dev/null || true) | sort -V | head -1 || true)
+            if [ -n "$SRC" ]; then
+              ln -s "$(basename "$SRC")" "$ANDROID_HOME/platforms/android-37"
+              echo "linked platforms/android-37 -> $(basename "$SRC")"
+            fi
+          fi
+          # buildToolsVersion is a String — sync it to the installed dir.
           BT=$( (ls -1 "$ANDROID_HOME/build-tools" || true) | sed -n '/^[0-9]/p' | sort -V | tail -1)
-          echo "installed: platforms/android-$PLAT  build-tools/$BT"
-          sed -i "/compileSdkVersion =/s/=.*/= \"$PLAT\"/" app/android/build.gradle
+          echo "installed build-tools: $BT"
           sed -i "/buildToolsVersion =/s/=.*/= \"$BT\"/" app/android/build.gradle
           grep -nE 'SdkVersion|buildToolsVersion' app/android/build.gradle
 
