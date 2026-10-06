@@ -58,7 +58,8 @@ object NotificationHelper {
           context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         } catch (e: Exception) {
           null
-        } ?: return false
+        }
+    if (sticky == null) return false
     val status =
         sticky.getIntExtra(
             BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
@@ -103,7 +104,8 @@ object NotificationHelper {
 
     val rv = RemoteViews(context.packageName, R.layout.notif_voltrix)
     rv.setTextViewText(R.id.notif_status, status)
-    rv.setTextViewTextColor(R.id.notif_status, color)
+    // RemoteViews has no setTextViewTextColor; the reflection setter is the standard way.
+    rv.setInt(R.id.notif_status, "setTextColor", color)
     rv.setImageViewResource(R.id.notif_toggle, toggleIcon)
     // The spinner only shows while the apply runs; the switch hides during it.
     rv.setViewVisibility(
