@@ -103,7 +103,10 @@ android {
                 storeFile releaseKeystoreFile
                 storePassword System.getenv("VOLTRIX_KS_PASS") ?: ""
                 keyAlias System.getenv("VOLTRIX_KS_ALIAS") ?: ""
-                keyPassword System.getenv("VOLTRIX_KS_KEY_PASS") ?: ""
+                // openssl pkcs12 -export encrypts the private key with -passout
+                // (the store password); VOLTRIX_KS_KEY_PASS holds a never-used
+                // random value and must not be fed to the signer.
+                keyPassword System.getenv("VOLTRIX_KS_PASS") ?: ""
             }
         }
     }
