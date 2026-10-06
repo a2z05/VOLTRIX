@@ -1,0 +1,10 @@
+# CI-injected artifacts — never commit
+module/app/VOLTRIX.apk
+VOLTRIX-*.zip
+app/android/app/release.keystore
+
+# Local tooling
+node_modules/
+*.p12
+*.pem
+.kenv/

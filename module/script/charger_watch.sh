@@ -1,0 +1,116 @@
+#!/system/bin/sh
+# =================================================================
+#  VOLTRIX — Charger Connect Watcher v1.0
+#  Adaptive-interval, change-detection design. Uses MODDIR (a
+#  known-stable path resolved once at startup) for self-relaunch
+#  rather than $0.
+#
+#  Author: a2z
+# =================================================================
+
+CFGDIR=/data/adb/voltrix
+CONFIG=$CFGDIR/config.sh
+LOG=$CFGDIR/watcher.log
+MODDIR=$(dirname "$0")
+APPLY_SCRIPT="$MODDIR/charge.sh"
+
+BATT=/sys/class/power_supply/battery
+
+log() { echo "[$(date '+%T')] $*" >> "$LOG"; }
+
+get_status() {
+    [ -r "$BATT/status" ] && cat "$BATT/status" 2>/dev/null || echo "Unknown"
+}
+
+get_temp_raw() {
+    [ -r "$BATT/temp" ] && cat "$BATT/temp" 2>/dev/null || echo ""
+}
+
+CHARGING_POLL_SECONDS=60
+TEMP_CHANGE_THRESHOLD_TENTHS=5
+IDLE_POLL_SECONDS=300
+AUTO_TRIGGER_ENABLED=true
+[ -f "$CONFIG" ] && . "$CONFIG"
+[ -n "$AUTO_TRIGGER_POLL_SECONDS" ] && CHARGING_POLL_SECONDS=$AUTO_TRIGGER_POLL_SECONDS
+[ -n "$AUTO_TRIGGER_IDLE_POLL_SECONDS" ] && IDLE_POLL_SECONDS=$AUTO_TRIGGER_IDLE_POLL_SECONDS
+
+if [ "$AUTO_TRIGGER_ENABLED" != "true" ]; then
+    log "Auto-trigger disabled in config, watcher exiting immediately"
+    exit 0
+fi
+
+log "Charger watcher starting (adaptive: ${CHARGING_POLL_SECONDS}s charging / ${IDLE_POLL_SECONDS}s idle)"
+
+last_status=$(get_status)
+last_temp_raw=$(get_temp_raw)
+last_full_apply_ts=0
+checks=0
+MAX_CHECKS=4000
+
+while [ "$checks" -lt "$MAX_CHECKS" ]; do
+    if [ "$last_status" = "Charging" ] || [ "$last_status" = "Full" ]; then
+        sleep "$CHARGING_POLL_SECONDS"
+    else
+        sleep "$IDLE_POLL_SECONDS"
+    fi
+
+    AUTO_TRIGGER_ENABLED=true
+    CHARGING_POLL_SECONDS=60
+    IDLE_POLL_SECONDS=300
+    [ -f "$CONFIG" ] && . "$CONFIG"
+    [ -n "$AUTO_TRIGGER_POLL_SECONDS" ] && CHARGING_POLL_SECONDS=$AUTO_TRIGGER_POLL_SECONDS
+    [ -n "$AUTO_TRIGGER_IDLE_POLL_SECONDS" ] && IDLE_POLL_SECONDS=$AUTO_TRIGGER_IDLE_POLL_SECONDS
+
+    if [ "$AUTO_TRIGGER_ENABLED" != "true" ]; then
+        log "Auto-trigger disabled mid-run, watcher exiting"
+        exit 0
+    fi
+
+    current_status=$(get_status)
+    now_ts=$(date +%s)
+
+    case "$current_status" in
+        Charging|Full)
+            if [ "$last_status" != "Charging" ] && [ "$last_status" != "Full" ]; then
+                log "Charger connected (was: $last_status) — full apply"
+                sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
+                last_full_apply_ts=$now_ts
+            else
+                current_temp_raw=$(get_temp_raw)
+                temp_changed=0
+                if [ -n "$current_temp_raw" ] && [ -n "$last_temp_raw" ]; then
+                    diff=$((current_temp_raw - last_temp_raw))
+                    [ "$diff" -lt 0 ] && diff=$((0 - diff))
+                    [ "$diff" -ge "$TEMP_CHANGE_THRESHOLD_TENTHS" ] && temp_changed=1
+                fi
+                time_since_last=$((now_ts - last_full_apply_ts))
+                if [ "$temp_changed" = "1" ] || [ "$time_since_last" -ge 600 ]; then
+                    log "Re-check (temp_changed=$temp_changed, ${time_since_last}s since last) — full apply"
+                    sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
+                    last_full_apply_ts=$now_ts
+                    last_temp_raw=$current_temp_raw
+                fi
+            fi
+            ;;
+        *)
+            if [ "$last_status" = "Charging" ] || [ "$last_status" = "Full" ]; then
+                log "Charger disconnected — restoring thermal protection"
+                sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
+            fi
+            ;;
+    esac
+
+    last_status="$current_status"
+    checks=$((checks + 1))
+    [ $((checks % 200)) -eq 0 ] && { tail -300 "$LOG" > "$LOG.tmp" 2>/dev/null && mv "$LOG.tmp" "$LOG"; }
+done
+
+log "Watcher reached check limit, relaunching fresh instance"
+WATCHER_SELF_PATH="$MODDIR/charger_watch.sh"
+if [ -f "$WATCHER_SELF_PATH" ]; then
+    nohup sh "$WATCHER_SELF_PATH" >> "$LOG" 2>&1 &
+    log "Relaunched via stable path (PID $!)"
+else
+    nohup sh "$0" >> "$LOG" 2>&1 &
+fi
+exit 0

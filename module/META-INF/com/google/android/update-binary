@@ -1,0 +1,6 @@
+#!/sbin/sh
+SKIPUNZIP=1
+. /data/adb/magisk/util_functions.sh 2>/dev/null || { echo "Need Magisk v20.4+"; exit 1; }
+require_magisk_version 20400
+install_module
+exit 0
