@@ -34,19 +34,25 @@ jobs:
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
           # Refresh cmdline-tools first: an old sdkmanager cannot see newly published platforms.
           "$SDKMANAGER" "cmdline-tools;latest" >/dev/null 2>&1 || true
-          [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ] && SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ] && SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" || true
           if ! "$SDKMANAGER" "platform-tools" "platforms;android-37" "build-tools;37.0.0"; then
-            echo "platforms;android-37 unavailable — selecting the newest available platform"
-            LIST=$("$SDKMANAGER" --list 2>/dev/null | grep -E 'platforms;android-|build-tools;' || true)
-            echo "$LIST" | tail -40
-            NEWEST=$(echo "$LIST" | grep -oE 'platforms;android-[0-9]+' | grep -oE '[0-9]+$' | sort -n | tail -1)
-            NEWEST_BT=$(echo "$LIST" | grep -oE 'build-tools;[0-9.]+' | sed 's/build-tools;//' | sort -V | tail -1)
-            echo "selected: platforms;android-$NEWEST build-tools;$NEWEST_BT"
-            [ -n "$NEWEST" ] && sed -i "s/compileSdkVersion = \"[0-9]*\"/compileSdkVersion = \"$NEWEST\"/" android/build.gradle
-            [ -n "$NEWEST_BT" ] && sed -i "s/buildToolsVersion = \"[0-9.]*\"/buildToolsVersion = \"$NEWEST_BT\"/" android/build.gradle
-            grep -nE 'compileSdkVersion|buildToolsVersion' android/build.gradle
-            "$SDKMANAGER" "platform-tools" "platforms;android-$NEWEST" "build-tools;$NEWEST_BT"
+            echo "platforms;android-37 is not a published id — discovering the real one"
+            LIST=$("$SDKMANAGER" --list 2>/dev/null || true)
+            # Prefer the requested 37 series, base first (e.g. android-37.0 over 37.2/betas);
+            # fall back to the newest numeric platform in the whole repo.
+            P=$(echo "$LIST" | grep -oE 'platforms;android-37(\.[0-9]+)?' | sort -uV | head -1 || true)
+            [ -n "$P" ] || P=$(echo "$LIST" | grep -oE 'platforms;android-[0-9]+(\.[0-9]+)?' | sort -uV | tail -1 || true)
+            echo "discovered platform package: $P"
+            "$SDKMANAGER" "platform-tools" "$P" "build-tools;37.0.0"
           fi
+          # Sync build.gradle to the platform/build-tools dirs that ACTUALLY exist on disk,
+          # so AGP resolves them by the exact installed name (android-37 vs android-37.0 etc).
+          PLAT=$( (ls -1 "$ANDROID_HOME/platforms" || true) | sed -n 's/^android-\([0-9][0-9.]*\)$/\1/p' | sort -V | tail -1)
+          BT=$( (ls -1 "$ANDROID_HOME/build-tools" || true) | sed -n '/^[0-9]/p' | sort -V | tail -1)
+          echo "installed: platforms/android-$PLAT  build-tools/$BT"
+          sed -i "/compileSdkVersion =/s/=.*/= \"$PLAT\"/" app/android/build.gradle
+          sed -i "/buildToolsVersion =/s/=.*/= \"$BT\"/" app/android/build.gradle
+          grep -nE 'SdkVersion|buildToolsVersion' app/android/build.gradle
 
       - name: Decode release keystore
         env:
