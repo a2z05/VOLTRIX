@@ -28,10 +28,25 @@ jobs:
 
       - name: Install Android SDK packages
         run: |
+          set -u
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           [ -x "$SDKMANAGER" ] || SDKMANAGER=sdkmanager
           yes | "$SDKMANAGER" --licenses >/dev/null 2>&1 || true
-          "$SDKMANAGER" "platform-tools" "platforms;android-37" "build-tools;37.0.0"
+          # Refresh cmdline-tools first: an old sdkmanager cannot see newly published platforms.
+          "$SDKMANAGER" "cmdline-tools;latest" >/dev/null 2>&1 || true
+          [ -x "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ] && SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          if ! "$SDKMANAGER" "platform-tools" "platforms;android-37" "build-tools;37.0.0"; then
+            echo "platforms;android-37 unavailable — selecting the newest available platform"
+            LIST=$("$SDKMANAGER" --list 2>/dev/null | grep -E 'platforms;android-|build-tools;' || true)
+            echo "$LIST" | tail -40
+            NEWEST=$(echo "$LIST" | grep -oE 'platforms;android-[0-9]+' | grep -oE '[0-9]+$' | sort -n | tail -1)
+            NEWEST_BT=$(echo "$LIST" | grep -oE 'build-tools;[0-9.]+' | sed 's/build-tools;//' | sort -V | tail -1)
+            echo "selected: platforms;android-$NEWEST build-tools;$NEWEST_BT"
+            [ -n "$NEWEST" ] && sed -i "s/compileSdkVersion = \"[0-9]*\"/compileSdkVersion = \"$NEWEST\"/" android/build.gradle
+            [ -n "$NEWEST_BT" ] && sed -i "s/buildToolsVersion = \"[0-9.]*\"/buildToolsVersion = \"$NEWEST_BT\"/" android/build.gradle
+            grep -nE 'compileSdkVersion|buildToolsVersion' android/build.gradle
+            "$SDKMANAGER" "platform-tools" "platforms;android-$NEWEST" "build-tools;$NEWEST_BT"
+          fi
 
       - name: Decode release keystore
         env:

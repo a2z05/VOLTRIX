@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="wrap_content"
+    android:orientation="horizontal" android:gravity="center_vertical"
+    android:background="@drawable/notif_bg"
+    android:paddingStart="14dp" android:paddingTop="12dp"
+    android:paddingEnd="14dp" android:paddingBottom="12dp">
+
+    <ImageView
+        android:id="@+id/notif_icon"
+        android:layout_width="34dp" android:layout_height="34dp"
+        android:src="@drawable/voltrix_bolt"
+        android:importantForAccessibility="no"/>
+
+    <LinearLayout
+        android:layout_width="0dp" android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="12dp" android:layout_marginEnd="8dp">
+
+        <TextView
+            android:id="@+id/notif_title"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:text="VOLTRIX · 67W fast charge"
+            android:textColor="#F2F3F8" android:textSize="14sp" android:textStyle="bold"/>
+
+        <TextView
+            android:id="@+id/notif_status"
+            android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="Switch on to activate 67W fast charge"
+            android:textColor="#9498B3" android:textSize="12sp"/>
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/notif_progress"
+        style="?android:attr/progressBarStyleSmall"
+        android:layout_width="24dp" android:layout_height="24dp"
+        android:indeterminate="true"
+        android:visibility="gone"/>
+
+    <ImageView
+        android:id="@+id/notif_toggle"
+        android:layout_width="52dp" android:layout_height="30dp"
+        android:src="@drawable/voltrix_toggle_off"
+        android:contentDescription="Toggle 67W fast charge"/>
+</LinearLayout>

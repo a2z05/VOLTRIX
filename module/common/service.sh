@@ -18,13 +18,10 @@ echo "[$(date '+%F %T')] === BOOT: guaranteed direct apply starting ===" >> "$LO
 sh "$MODDIR/script/charge.sh" >> "$LOG" 2>&1
 echo "[$(date '+%F %T')] === BOOT: direct apply finished, exit=$? ===" >> "$LOG"
 
-WAKELOCK_NAME="voltrix_watcher_lock"
-if [ -w /sys/power/wake_lock ]; then
-    echo "$WAKELOCK_NAME" > /sys/power/wake_lock 2>/dev/null
-    echo "[$(date '+%F %T')] wakelock acquired: $WAKELOCK_NAME" >> "$LOG"
-else
-    echo "[$(date '+%F %T')] WARNING: /sys/power/wake_lock not writable" >> "$LOG"
-fi
+# No wakelock: the watcher must never keep the SoC awake in standby.
+# It only runs while the system is already awake — plugging the charger in
+# wakes the device, so plug-in detection still fires within its sleep window.
+echo "[$(date '+%F %T')] standby-safe: watcher launched without wakelock" >> "$LOG"
 
 if [ -f "$MODDIR/script/charger_watch.sh" ]; then
     nohup sh "$MODDIR/script/charger_watch.sh" >> "$CFGDIR/watcher.log" 2>&1 &

@@ -11,7 +11,7 @@ import android.widget.Toast
  * Quick Settings tile: "VOLTRIX 67W".
  *
  * onClick -> detects charging from the sticky ACTION_BATTERY_CHANGED broadcast (no root):
- *   charging  -> posts the "Activate 67W fast charge?" notification
+ *   charging  -> posts the VOLTRIX card immediately (toggle lives in it)
  *   otherwise -> toast "Connect the charger first"
  */
 class VoltrixTileService : TileService() {
@@ -21,7 +21,7 @@ class VoltrixTileService : TileService() {
       Toast.makeText(this, "Connect the charger first", Toast.LENGTH_SHORT).show()
       return
     }
-    val posted = NotificationHelper.postActivate(this)
+    val posted = NotificationHelper.show(this, NotificationHelper.State.QUESTION)
     if (!posted) {
       Toast.makeText(this, "Allow notifications for VOLTRIX first", Toast.LENGTH_SHORT).show()
     }
