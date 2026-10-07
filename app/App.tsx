@@ -43,10 +43,15 @@ import {
   cfgSet,
   checkRoot,
   errMsg,
+  exec,
+  getPref,
+  isNotifStyle,
   loadConfig,
   readState,
   runApplyScript,
+  setPref,
   settingsFromConfig,
+  NotifStyle,
   writeSettings,
 } from './src/native';
 import {colors, space} from './src/theme';
@@ -98,6 +103,7 @@ function AppInner() {
   const [stateOffline, setStateOffline] = useState(false);
   const [profile, setProfile] = useState<ProfileKey>('performance');
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [notifStyle, setNotifStyleState] = useState<NotifStyle>('CARD');
   const [tab, setTab] = useState<string>('monitor');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -247,6 +253,14 @@ function AppInner() {
 
     (async () => {
       await requestNotificationPermission();
+      try {
+        const ns = await getPref('NOTIF_STYLE');
+        if (isNotifStyle(ns)) {
+          setNotifStyleState(ns);
+        }
+      } catch {
+        // pref read is best-effort — the default style applies
+      }
       const ok = await checkRoot();
       setRootState(ok ? 'ok' : 'denied');
 
@@ -272,6 +286,16 @@ function AppInner() {
     })();
   }, [runApply]);
 
+  // --- notification style: persisted immediately, previewed live ------------
+  const setNotifStyle = useCallback((v: NotifStyle) => {
+    setNotifStyleState(v);
+    setPref('NOTIF_STYLE', v).catch(e => console.warn('notif style save:', errMsg(e)));
+    // Live preview: pop the freshly styled card through the watcher's receiver.
+    exec(
+      'am broadcast -n com.vnerxy.voltrix/.ShowCardReceiver -a com.vnerxy.voltrix.SHOW_CARD --ez fast false >/dev/null 2>&1',
+    ).catch(() => undefined);
+  }, []);
+
   // --- header subtitle -----------------------------------------------------
   const subtitle = useMemo(() => {
     if (!state?.ts) {
@@ -292,6 +316,8 @@ function AppInner() {
       screen = (
         <SettingsScreen
           settings={settings}
+          notifStyle={notifStyle}
+          onNotifStyle={setNotifStyle}
           onChange={updateSettings}
           onApply={() => {
             runApply();

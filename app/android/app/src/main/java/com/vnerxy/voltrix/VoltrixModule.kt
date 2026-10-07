@@ -1,5 +1,6 @@
 package com.vnerxy.voltrix
 
+import android.content.Context
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -80,6 +81,38 @@ class VoltrixModule(reactContext: ReactApplicationContext) :
           }
         }
       }
+    }
+  }
+
+  /**
+   * App-private preferences (SharedPreferences, "voltrix") — the notification
+   * side reads these natively in the same process, no root involved.
+   * getPref resolves "" for missing values or any error (best-effort reads).
+   */
+  @ReactMethod
+  fun getPref(key: String, promise: Promise) {
+    try {
+      val v =
+          reactApplicationContext
+              .getSharedPreferences("voltrix", Context.MODE_PRIVATE)
+              .getString(key, "")
+      promise.resolve(v ?: "")
+    } catch (e: Exception) {
+      promise.resolve("")
+    }
+  }
+
+  @ReactMethod
+  fun setPref(key: String, value: String, promise: Promise) {
+    try {
+      reactApplicationContext
+          .getSharedPreferences("voltrix", Context.MODE_PRIVATE)
+          .edit()
+          .putString(key, value)
+          .apply()
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("E_PREF", "Could not save preference (${e.message})", e)
     }
   }
 

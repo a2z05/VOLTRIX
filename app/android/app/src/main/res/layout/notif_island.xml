@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dynamic-Island-style floating pill: centered capsule, live spinner,
+     single-line status, switch on the right. The pill row carries a stable
+     id so NotificationHelper can swap in the accent rim while 67W runs. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:id="@+id/notif_pill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/notif_pill"
+        android:paddingStart="16dp"
+        android:paddingEnd="8dp"
+        android:paddingTop="6dp"
+        android:paddingBottom="6dp">
+
+        <ProgressBar
+            android:id="@+id/notif_progress"
+            style="?android:attr/progressBarStyleSmall"
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:indeterminate="true"
+            android:visibility="visible"/>
+
+        <TextView
+            android:id="@+id/notif_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:text="Tap to activate 67W"
+            android:textColor="#F2F3F8"
+            android:textSize="13sp"
+            android:textStyle="bold"/>
+
+        <ImageView
+            android:id="@+id/notif_toggle"
+            android:layout_width="46dp"
+            android:layout_height="27dp"
+            android:layout_marginStart="12dp"
+            android:src="@drawable/voltrix_toggle_off"
+            android:contentDescription="Toggle 67W fast charge"/>
+    </LinearLayout>
+</FrameLayout>

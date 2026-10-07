@@ -236,6 +236,49 @@ export function settingsFromConfig(cfg: ConfigMap): Settings {
 }
 
 /** Writes every Settings key to config.sh (validated, sequential). */
+/* ------------------------------------------------- notification style --- */
+
+/**
+ * Presentation styles for the charging notification (Settings -> Notification).
+ * The active value lives in SharedPreferences under NOTIF_STYLE and is read
+ * natively by NotificationHelper; only CARD (the original look) is default.
+ */
+export const NOTIF_STYLES = ['ISLAND', 'CARD', 'SLIM', 'CLASSIC'] as const;
+export type NotifStyle = (typeof NOTIF_STYLES)[number];
+
+export function isNotifStyle(v: string): v is NotifStyle {
+  return (NOTIF_STYLES as readonly string[]).includes(v);
+}
+
+export const NOTIF_STYLE_LABELS: Record<NotifStyle, string> = {
+  ISLAND: 'Island',
+  CARD: 'Card',
+  SLIM: 'Slim',
+  CLASSIC: 'Classic',
+};
+
+/** Best-effort pref read — "" (or any failure) means "use the default". */
+export async function getPref(key: string): Promise<string> {
+  const mod = NativeModules.Voltrix;
+  if (!mod || typeof mod.getPref !== 'function') {
+    return '';
+  }
+  try {
+    const v: unknown = await mod.getPref(key);
+    return typeof v === 'string' ? v : '';
+  } catch {
+    return '';
+  }
+}
+
+export async function setPref(key: string, value: string): Promise<void> {
+  const mod = NativeModules.Voltrix;
+  if (!mod || typeof mod.setPref !== 'function') {
+    throw new Error('VOLTRIX native module not linked');
+  }
+  await mod.setPref(key, value);
+}
+
 export async function writeSettings(s: Settings): Promise<void> {
   const throttleVal = s.throttlesDisabled ? 'true' : 'false';
   const pairs: Array<[string, string]> = [

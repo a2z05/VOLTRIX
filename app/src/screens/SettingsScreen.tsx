@@ -8,14 +8,19 @@
  * were — same props, new feel. Sections spring in staggered.
  */
 import React from 'react';
-import {ScrollView, StyleSheet, View} from 'react-native';
+import {ScrollView, StyleSheet, Text, View} from 'react-native';
 import Animated from 'react-native-reanimated';
-import {Button, Card, Row, SectionTitle} from '../components/ui';
+import {Button, Card, PressableScale, Row, SectionTitle} from '../components/ui';
 import {Slider} from '../components/Slider';
 import {Toggle} from '../components/Toggle';
-import {Settings} from '../native';
+import {
+  NOTIF_STYLES,
+  NOTIF_STYLE_LABELS,
+  NotifStyle,
+  Settings,
+} from '../native';
 import {bentoIn} from '../anim';
-import {colors, space} from '../theme';
+import {colors, radii, space} from '../theme';
 
 function SliderRow({
   children,
@@ -29,14 +34,25 @@ function SliderRow({
   );
 }
 
+const STYLE_HINTS: Record<NotifStyle, string> = {
+  ISLAND: 'Centered capsule — lives until you swipe it away, accent rim when 67W runs',
+  CARD: 'The original two-line card with title, state and switch',
+  SLIM: 'Low-profile single line: bolt, status, switch',
+  CLASSIC: 'Stock Android text with a Toggle action button — lightest option',
+};
+
 export function SettingsScreen({
   settings,
+  notifStyle,
+  onNotifStyle,
   onChange,
   onApply,
   onSave,
   busy,
 }: {
   settings: Settings;
+  notifStyle: NotifStyle;
+  onNotifStyle: (v: NotifStyle) => void;
   onChange: (patch: Partial<Settings>) => void;
   onApply: () => void;
   onSave: () => void;
@@ -148,7 +164,33 @@ export function SettingsScreen({
         </Card>
       </Animated.View>
 
-      <Animated.View entering={bentoIn(3)} style={styles.actions}>
+      <Animated.View entering={bentoIn(3)}>
+        <SectionTitle hint="Charging card style">Notification</SectionTitle>
+        <Card>
+          <View style={styles.styleRow}>
+            {NOTIF_STYLES.map(s => {
+              const active = s === notifStyle;
+              return (
+                <PressableScale
+                  key={s}
+                  accessibilityRole="tab"
+                  accessibilityState={{selected: active}}
+                  accessibilityLabel={`Notification style ${NOTIF_STYLE_LABELS[s]}`}
+                  onPress={() => onNotifStyle(s)}
+                  style={[styles.styleChip, active && styles.styleChipActive]}>
+                  <Text
+                    style={[styles.styleChipText, active && styles.styleChipTextActive]}>
+                    {NOTIF_STYLE_LABELS[s]}
+                  </Text>
+                </PressableScale>
+              );
+            })}
+          </View>
+          <Text style={styles.styleHint}>{STYLE_HINTS[notifStyle]}</Text>
+        </Card>
+      </Animated.View>
+
+      <Animated.View entering={bentoIn(4)} style={styles.actions}>
         <Button label="Apply now" onPress={onApply} busy={busy} />
         <Button
           label="Save settings"
@@ -184,5 +226,40 @@ const styles = StyleSheet.create({
   },
   actionGap: {
     marginTop: 0,
+  },
+  styleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: space.sm,
+    paddingHorizontal: space.lg,
+    paddingTop: space.lg,
+  },
+  styleChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radii.pill,
+    backgroundColor: colors.cardInset,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  styleChipActive: {
+    backgroundColor: colors.accentSoft,
+    borderColor: colors.accentBright,
+  },
+  styleChipText: {
+    color: colors.text3,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+  styleChipTextActive: {
+    color: colors.text,
+  },
+  styleHint: {
+    paddingHorizontal: space.lg,
+    paddingTop: space.sm,
+    paddingBottom: space.lg,
+    color: colors.text4,
+    fontSize: 12,
+    lineHeight: 16,
   },
 });

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Slim one-line strip: mini bolt, status, live spinner, switch.
+     Low profile — the quietest of the custom styles. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/notif_root"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:background="@drawable/notif_slim_bg"
+    android:paddingStart="12dp"
+    android:paddingTop="7dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="7dp">
+
+    <ImageView
+        android:id="@+id/notif_icon"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:src="@drawable/voltrix_bolt"
+        android:importantForAccessibility="no"/>
+
+    <TextView
+        android:id="@+id/notif_status"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="8dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:text="Tap to activate 67W"
+        android:textColor="#C8CBD6"
+        android:textSize="12sp"/>
+
+    <ProgressBar
+        android:id="@+id/notif_progress"
+        style="?android:attr/progressBarStyleSmall"
+        android:layout_width="14dp"
+        android:layout_height="14dp"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="6dp"
+        android:indeterminate="true"
+        android:visibility="visible"/>
+
+    <ImageView
+        android:id="@+id/notif_toggle"
+        android:layout_width="44dp"
+        android:layout_height="26dp"
+        android:src="@drawable/voltrix_toggle_off"
+        android:contentDescription="Toggle 67W fast charge"/>
+</LinearLayout>
