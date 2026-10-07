@@ -353,6 +353,17 @@ export async function setPref(key: string, value: string): Promise<void> {
   await mod.setPref(key, value);
 }
 
+/** True when the floating overlay card may draw above other apps. */
+export async function canDrawOverlays(): Promise<boolean> {
+  const v = await NativeModules.Voltrix?.canDrawOverlays?.();
+  return v === true;
+}
+
+/** Opens the system "display over other apps" screen for VOLTRIX. */
+export async function requestOverlayPermission(): Promise<void> {
+  await NativeModules.Voltrix?.requestOverlayPermission?.();
+}
+
 export async function writeSettings(s: Settings): Promise<void> {
   const throttleVal = s.throttlesDisabled ? 'true' : 'false';
   const pairs: Array<[string, string]> = [

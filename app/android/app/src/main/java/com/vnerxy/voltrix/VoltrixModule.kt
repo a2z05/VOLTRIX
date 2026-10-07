@@ -1,6 +1,9 @@
 package com.vnerxy.voltrix
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
@@ -113,6 +116,36 @@ class VoltrixModule(reactContext: ReactApplicationContext) :
       promise.resolve(true)
     } catch (e: Exception) {
       promise.reject("E_PREF", "Could not save preference (${e.message})", e)
+    }
+  }
+
+  /** True when the floating overlay card may draw above other apps. */
+  @ReactMethod
+  fun canDrawOverlays(promise: Promise) {
+    try {
+      promise.resolve(Settings.canDrawOverlays(reactApplicationContext))
+    } catch (e: Exception) {
+      promise.resolve(false)
+    }
+  }
+
+  /**
+   * Opens the system "display over other apps" screen for this package.
+   * Safe from JS: the method only runs while the app is in the foreground,
+   * which is exactly when an activity start is allowed.
+   */
+  @ReactMethod
+  fun requestOverlayPermission(promise: Promise) {
+    try {
+      val intent =
+          Intent(
+                  Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                  Uri.parse("package:" + reactApplicationContext.packageName))
+              .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      reactApplicationContext.startActivity(intent)
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("E_OVERLAY", "Could not open overlay settings (${e.message})", e)
     }
   }
 

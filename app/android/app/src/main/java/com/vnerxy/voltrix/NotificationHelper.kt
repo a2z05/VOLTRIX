@@ -50,17 +50,26 @@ import android.widget.RemoteViews
  */
 object NotificationHelper {
 
-  private const val CHANNEL_ID = "voltrix_fast"
   private const val NOTIF_ID = 6701
   private const val PREFS = "voltrix"
 
   /**
-   * Our own channel revision marker: shouldBypassDnd() — the getter that would
-   * tell us "this channel predates the DND-bypass upgrade" — is missing from
-   * the compile SDK, so track the revision ourselves instead.
+   * Two channels, both re-issued (create is idempotent) right before notify()
+   * and never deleted while we post to them:
+   *
+   *   CH_HEADS — sound + vibration + DND bypass; used when the overlay card
+   *              cannot be drawn (missing SYSTEM_ALERT_WINDOW permission).
+   *   CH_SHADE — silent shade entry; used while the overlay is up so the card
+   *              never pops twice.
+   *
+   * v1.0.8 deleted and recreated CH_LEGACY in place; if the device lags
+   * between delete and create, notify() targets a channel that no longer
+   * exists and the system drops the notification in silence. Posting only to
+   * ids we just created makes that state impossible.
    */
-  private const val CH_REV_KEY = "notif_channel_rev"
-  private const val CH_REV = 1
+  private const val CH_HEADS = "voltrix_hu"
+  private const val CH_SHADE = "voltrix_shade"
+  private const val CH_LEGACY = "voltrix_fast"
 
   /** SharedPreferences key written by the Settings screen (JS) and read here. */
   const val PREF_STYLE = "NOTIF_STYLE"
@@ -116,10 +125,22 @@ object NotificationHelper {
         status == BatteryManager.BATTERY_STATUS_FULL
   }
 
-  /** Builds and posts the card for [state]. Returns false if blocked by permission. */
+  /**
+   * Builds and posts the card for [state]. The overlay window is the primary
+   * surface (drawn above every app, immune to DND / floating-alert gates);
+   * the notification follows on the heads-up channel only when the overlay
+   * is unavailable, otherwise silently in the shade.
+   */
   fun show(context: Context, state: State): Boolean {
-    if (!canNotify(context)) return false
-    ensureChannel(context)
+    val overlay =
+        if (state == State.NOT_CHARGING) {
+          OverlayCard.hide(context)
+          false
+        } else {
+          OverlayCard.show(context, state)
+        }
+    if (!canNotify(context)) return overlay
+    val chId = ensureChannels(context, overlay)
 
     var status = ""
     var shortStatus = ""
@@ -182,7 +203,7 @@ object NotificationHelper {
     // --- stock text style: no RemoteViews at all -----------------------------
     if (st == Style.CLASSIC) {
       val classic =
-          if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL_ID)
+          if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, chId)
           // Pre-O heads-up is governed by priority, not channels.
           else Notification.Builder(context).setPriority(Notification.PRIORITY_HIGH)
       classic
@@ -229,7 +250,7 @@ object NotificationHelper {
 
     val builder =
         if (Build.VERSION.SDK_INT >= 26) {
-          Notification.Builder(context, CHANNEL_ID).setOnlyAlertOnce(true)
+          Notification.Builder(context, chId).setOnlyAlertOnce(true)
         } else Notification.Builder(context).setPriority(Notification.PRIORITY_HIGH)
     builder
         .setSmallIcon(R.drawable.voltrix_bolt)
@@ -244,40 +265,48 @@ object NotificationHelper {
   }
 
   fun cancel(context: Context) {
+    OverlayCard.hide(context)
     context.getSystemService(NotificationManager::class.java).cancel(NOTIF_ID)
   }
 
-  private fun ensureChannel(context: Context) {
-    if (Build.VERSION.SDK_INT < 26) return
+  /**
+   * Creates both channels unconditionally — createNotificationChannel() is an
+   * idempotent write, and re-issuing it right before notify() guarantees the
+   * target exists even if a device-side sweep removed it. Nothing we post to
+   * is ever deleted; the legacy v1.0.8 id is cleaned up best-effort instead
+   * (deletion there can no longer eat the card, we never post to it).
+   */
+  private fun ensureChannels(context: Context, overlay: Boolean): String {
+    if (Build.VERSION.SDK_INT < 26) return ""
     val nm = context.getSystemService(NotificationManager::class.java)
-    val existing = nm.getNotificationChannel(CHANNEL_ID)
-    // Channels are immutable once created: createNotificationChannel() ignores
-    // changed settings on an existing channel. A channel installed before the
-    // DND-bypass/sound upgrade must be deleted and rebuilt, otherwise DND
-    // swallows the heads-up forever.
-    val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-    if (existing != null && prefs.getInt(CH_REV_KEY, 0) < CH_REV) {
-      nm.deleteNotificationChannel(CHANNEL_ID)
+
+    val heads =
+        NotificationChannel(CH_HEADS, "67W fast charge", NotificationManager.IMPORTANCE_HIGH)
+    heads.setBypassDnd(true)
+    heads.setSound(
+        Uri.parse("content://settings/system/notification_sound"),
+        AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+            .build())
+    heads.enableVibration(true)
+    heads.vibrationPattern = longArrayOf(0, 60, 90, 60)
+    heads.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
+    heads.setShowBadge(false)
+    nm.createNotificationChannel(heads)
+
+    val shade =
+        NotificationChannel(CH_SHADE, "67W charge status", NotificationManager.IMPORTANCE_DEFAULT)
+    shade.setShowBadge(false)
+    nm.createNotificationChannel(shade)
+
+    try {
+      if (nm.getNotificationChannel(CH_LEGACY) != null) {
+        nm.deleteNotificationChannel(CH_LEGACY)
+      }
+    } catch (e: Exception) {
     }
-    if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-      val ch =
-          NotificationChannel(
-              CHANNEL_ID, "67W fast charge", NotificationManager.IMPORTANCE_HIGH)
-      // This card reports an active charging session — it must surface even
-      // with Do Not Disturb on (night-charge is exactly when DND is active).
-      ch.setBypassDnd(true)
-      ch.setSound(
-          Uri.parse("content://settings/system/notification_sound"),
-          AudioAttributes.Builder()
-              .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-              .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-              .build())
-      ch.enableVibration(true)
-      ch.vibrationPattern = longArrayOf(0, 60, 90, 60)
-      ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
-      ch.setShowBadge(false)
-      nm.createNotificationChannel(ch)
-      prefs.edit().putInt(CH_REV_KEY, CH_REV).apply()
-    }
+
+    return if (overlay) CH_SHADE else CH_HEADS
   }
 }

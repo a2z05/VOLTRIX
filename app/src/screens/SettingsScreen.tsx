@@ -18,9 +18,61 @@ import {
   NOTIF_STYLE_LABELS,
   NotifStyle,
   Settings,
+  canDrawOverlays,
+  requestOverlayPermission,
 } from '../native';
 import {bentoIn} from '../anim';
 import {colors, radii, space} from '../theme';
+
+/** Floating-overlay permission status + grant shortcut (opens system screen). */
+function OverlayRow() {
+  const [granted, setGranted] = React.useState<boolean | null>(null);
+
+  const check = () => {
+    canDrawOverlays()
+      .then(setGranted)
+      .catch(() => setGranted(false));
+  };
+
+  React.useEffect(() => {
+    check();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const request = async () => {
+    try {
+      await requestOverlayPermission();
+    } catch {
+      // System screen unavailable — the hint text explains the manual path.
+    }
+    // The toggle flips while we are backgrounded — re-check on return.
+    setTimeout(check, 900);
+    setTimeout(check, 2800);
+  };
+
+  return (
+    <>
+      <Text style={styles.styleChipText}>
+        {granted === null
+          ? 'Checking…'
+          : granted
+            ? 'Overlay active'
+            : 'Overlay off'}
+      </Text>
+      {granted === false ? (
+        <PressableScale
+          accessibilityRole="button"
+          accessibilityLabel="Enable overlay permission"
+          onPress={request}
+          style={[styles.styleChip, styles.styleChipActive]}>
+          <Text style={[styles.styleChipText, styles.styleChipTextActive]}>
+            Enable
+          </Text>
+        </PressableScale>
+      ) : null}
+    </>
+  );
+}
 
 function SliderRow({
   children,
@@ -233,6 +285,20 @@ export function SettingsScreen({
             })}
           </View>
           <Text style={styles.styleHint}>{STYLE_HINTS[notifStyle]}</Text>
+        </Card>
+      </Animated.View>
+
+      <Animated.View entering={bentoIn(4)}>
+        <SectionTitle hint="Card drawn above every app">Overlay</SectionTitle>
+        <Card>
+          <View style={styles.styleRow}>
+            <OverlayRow />
+          </View>
+          <Text style={styles.styleHint}>
+            Shows the live charging card over any app the moment the charger
+            connects — independent of floating-alert, notification and DND
+            settings.
+          </Text>
         </Card>
       </Animated.View>
 
