@@ -87,10 +87,6 @@ Devices missing those nodes install cleanly and degrade gracefully — the affec
 
 Remove the module from KernelSU / Magisk (or drop a `remove` file in the module folder) and reboot. The app can then be uninstalled like any other app. Nothing outside `/data/adb/vnerxy_charge/` is touched.
 
-## Credits
-
-Crafted by **a2z (Vnerxy)** — [github.com/a2z05/VOLTRIX](https://github.com/a2z05/VOLTRIX)
-
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
