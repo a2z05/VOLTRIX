@@ -9,6 +9,9 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.net.Uri
+import android.provider.RingtoneManager
 import android.os.BatteryManager
 import android.os.Build
 import android.view.View
@@ -173,7 +176,8 @@ object NotificationHelper {
     if (st == Style.CLASSIC) {
       val classic =
           if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL_ID)
-          else Notification.Builder(context)
+          // Pre-O heads-up is governed by priority, not channels.
+          else Notification.Builder(context).setPriority(Notification.PRIORITY_HIGH)
       classic
           .setSmallIcon(R.drawable.voltrix_bolt)
           .setContentTitle("VOLTRIX · 67W fast charge")
@@ -219,7 +223,7 @@ object NotificationHelper {
     val builder =
         if (Build.VERSION.SDK_INT >= 26) {
           Notification.Builder(context, CHANNEL_ID).setOnlyAlertOnce(true)
-        } else Notification.Builder(context)
+        } else Notification.Builder(context).setPriority(Notification.PRIORITY_HIGH)
     builder
         .setSmallIcon(R.drawable.voltrix_bolt)
         .setContentTitle("VOLTRIX · 67W fast charge")
@@ -239,9 +243,32 @@ object NotificationHelper {
   private fun ensureChannel(context: Context) {
     if (Build.VERSION.SDK_INT < 26) return
     val nm = context.getSystemService(NotificationManager::class.java)
+    val existing = nm.getNotificationChannel(CHANNEL_ID)
+    // Channels are immutable once created: createNotificationChannel() ignores
+    // changed settings on an existing channel. A channel installed before the
+    // DND-bypass/sound upgrade must be deleted and rebuilt, otherwise DND
+    // swallows the heads-up forever.
+    if (existing != null && (!existing.shouldBypassDnd() || existing.sound == null)) {
+      nm.deleteNotificationChannel(CHANNEL_ID)
+    }
     if (nm.getNotificationChannel(CHANNEL_ID) == null) {
-      nm.createNotificationChannel(
-          NotificationChannel(CHANNEL_ID, "67W fast charge", NotificationManager.IMPORTANCE_HIGH))
+      val ch =
+          NotificationChannel(
+              CHANNEL_ID, "67W fast charge", NotificationManager.IMPORTANCE_HIGH)
+      // This card reports an active charging session — it must surface even
+      // with Do Not Disturb on (night-charge is exactly when DND is active).
+      ch.setBypassDnd(true)
+      ch.setSound(
+          RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+          AudioAttributes.Builder()
+              .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+              .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+              .build())
+      ch.enableVibration(true)
+      ch.vibrationPattern = longArrayOf(0, 60, 90, 60)
+      ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
+      ch.setShowBadge(false)
+      nm.createNotificationChannel(ch)
     }
   }
 }

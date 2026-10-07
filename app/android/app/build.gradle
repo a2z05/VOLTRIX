@@ -88,8 +88,8 @@ android {
         applicationId "com.vnerxy.voltrix"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 8
-        versionName "1.0.7"
+        versionCode 9
+        versionName "1.0.8"
     }
     splits {
         // Ship one arm64 split (ndk.abiFilters alone does NOT strip

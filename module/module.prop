@@ -1,7 +1,7 @@
 id=voltrix
 name=VOLTRIX
-version=1.0.7
-versionCode=8
+version=1.0.8
+versionCode=9
 author=a2z
 description=67W full-charge unlock with guaranteed boot-time apply, thermal gate control and a companion app. Replaces the old WebUI.
 updateJson=
