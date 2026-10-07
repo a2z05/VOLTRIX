@@ -4,8 +4,13 @@
  * Responsibilities of this root component:
  *  - POST_NOTIFICATIONS runtime request (API 33+)
  *  - root probe via exec('id') + persistent banner on failure
+ *  - first-run wizard gate (UI_WIZARD_DONE in config.sh; a failed config
+ *    read also shows the wizard — it must never brick startup)
  *  - one-shot apply on mount, then state polling every 4s while foreground
  *  - settings/profile/log orchestration passed down to the screens
+ *
+ * Layout: animated app header on top, spring-entered screen content in the
+ * middle, floating bottom tab bar with a sliding indicator, toast above it.
  */
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
@@ -18,13 +23,19 @@ import {
   Text,
   View,
 } from 'react-native';
+import {GestureHandlerRootView} from 'react-native-gesture-handler';
+import Animated from 'react-native-reanimated';
 import {SafeAreaProvider, useSafeAreaInsets} from 'react-native-safe-area-context';
-import {SegmentedTabs, TabDef} from './src/components/SegmentedTabs';
+import {TabBar, TabDef} from './src/components/TabBar';
 import {Toast} from './src/components/Toast';
+import {BoltTile} from './src/components/icons';
+import {Pill} from './src/components/ui';
+import {FirstRunWizard} from './src/components/Wizard';
 import {AboutScreen} from './src/screens/AboutScreen';
 import {LogScreen} from './src/screens/LogScreen';
 import {MonitorScreen, ProfileKey} from './src/screens/MonitorScreen';
 import {SettingsScreen} from './src/screens/SettingsScreen';
+import {chromeIn, screenIn} from './src/anim';
 import {
   DEFAULT_SETTINGS,
   Settings,
@@ -38,7 +49,7 @@ import {
   settingsFromConfig,
   writeSettings,
 } from './src/native';
-import {colors, radii} from './src/theme';
+import {colors, space} from './src/theme';
 
 const TABS: TabDef[] = [
   {key: 'monitor', label: 'Monitor'},
@@ -72,7 +83,9 @@ async function requestNotificationPermission(): Promise<void> {
 export default function App(): React.JSX.Element {
   return (
     <SafeAreaProvider>
-      <AppInner />
+      <GestureHandlerRootView style={styles.fill}>
+        <AppInner />
+      </GestureHandlerRootView>
     </SafeAreaProvider>
   );
 }
@@ -88,6 +101,7 @@ function AppInner() {
   const [tab, setTab] = useState<string>('monitor');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [wizard, setWizard] = useState(false);
   const [, setTick] = useState(0);
 
   const settingsRef = useRef(settings);
@@ -224,7 +238,7 @@ function AppInner() {
     [busy, refresh, showToast],
   );
 
-  // --- boot: permission, root check, config load, initial apply ------------
+  // --- boot: permission, root check, config load, wizard gate, apply -------
   useEffect(() => {
     if (initedRef.current) {
       return;
@@ -235,9 +249,9 @@ function AppInner() {
       await requestNotificationPermission();
       const ok = await checkRoot();
       setRootState(ok ? 'ok' : 'denied');
-      if (!ok) {
-        return;
-      }
+
+      // Wizard gate: run even when root is missing — a failed config read
+      // means we cannot know whether the user has seen onboarding, so show it.
       try {
         const cfg = await loadConfig();
         setSettings(settingsFromConfig(cfg));
@@ -245,8 +259,14 @@ function AppInner() {
         if (p && PROFILE_KEYS.some(k => k === p)) {
           setProfile(p as ProfileKey);
         }
+        setWizard(cfg.UI_WIZARD_DONE !== 'true');
       } catch (e) {
         console.warn('config load failed:', errMsg(e));
+        setWizard(true);
+      }
+
+      if (!ok) {
+        return;
       }
       await runApply({silent: true});
     })();
@@ -262,6 +282,9 @@ function AppInner() {
     return m > 0 ? `Updated ${m}m ago` : `Updated ${ago}s ago`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, stateOffline, toast, busy, tab]);
+
+  const isCharging = (state?.status ?? '').toLowerCase() === 'charging';
+  const live = rootState === 'ok' && !stateOffline && state != null;
 
   let screen: React.ReactNode;
   switch (tab) {
@@ -298,46 +321,64 @@ function AppInner() {
   return (
     <View style={[styles.root, {paddingTop: insets.top}]}>
       {/* targetSdk 36 => edge-to-edge: the status bar is transparent and our
-          root View paints #0b0c14 behind it, so only barStyle is needed. */}
+          root View paints #08090a behind it, so only barStyle is needed. */}
       <StatusBar barStyle="light-content" />
 
-      <View style={styles.header}>
-        <View style={styles.headerIcon}>
-          <Text style={styles.headerIconText}>⚡</Text>
-        </View>
+      {/* animated app header */}
+      <Animated.View entering={chromeIn()} style={styles.header}>
+        <BoltTile size={42} active={isCharging} />
         <View style={styles.headerTextCol}>
           <Text style={styles.headerTitle}>VOLTRIX</Text>
           <Text style={styles.headerSub} numberOfLines={1}>
             {subtitle}
           </Text>
         </View>
-      </View>
+        <Pill
+          text={live ? 'Live' : 'Idle'}
+          tone={live ? 'ok' : 'default'}
+          dot
+        />
+      </Animated.View>
 
       {rootState === 'denied' ? (
-        <View style={styles.errorBanner}>
+        <Animated.View entering={chromeIn(80)} style={styles.errorBanner}>
           <Text style={styles.errorText}>
             Root access required — grant VOLTRIX in KernelSU/Magisk, then reopen
           </Text>
-        </View>
+        </Animated.View>
       ) : null}
       {rootState === 'ok' && stateOffline ? (
-        <View style={styles.errorBanner}>
+        <Animated.View entering={chromeIn(80)} style={styles.errorBanner}>
           <Text style={styles.errorText}>
             Module offline — state unreadable. Run “Apply now” in Settings.
           </Text>
-        </View>
+        </Animated.View>
       ) : null}
 
-      <SegmentedTabs tabs={TABS} active={tab} onChange={setTab} />
+      <View style={styles.content}>
+        <Animated.View key={tab} entering={screenIn()} style={styles.fill}>
+          {screen}
+        </Animated.View>
+      </View>
 
-      <View style={styles.content}>{screen}</View>
+      <TabBar
+        tabs={TABS}
+        active={tab}
+        onChange={setTab}
+        bottomOffset={10 + insets.bottom}
+      />
 
-      <Toast message={toast} bottomOffset={24 + insets.bottom} />
+      <Toast message={toast} bottomOffset={86 + insets.bottom} />
+
+      {wizard ? <FirstRunWizard onFinish={() => setWizard(false)} /> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+  },
   root: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -345,54 +386,42 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 4,
-  },
-  headerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: colors.accentGlow,
-    shadowOpacity: 0.6,
-    shadowRadius: 14,
-    shadowOffset: {width: 0, height: 4},
-    elevation: 4,
-  },
-  headerIconText: {
-    fontSize: 19,
+    gap: space.md,
+    paddingHorizontal: space.gutter,
+    paddingTop: space.lg,
+    paddingBottom: space.sm,
   },
   headerTextCol: {
     flex: 1,
     minWidth: 0,
   },
   headerTitle: {
-    fontSize: 19,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
     color: colors.text,
-    letterSpacing: 1.5,
+    letterSpacing: 3,
   },
   headerSub: {
     fontSize: 12.5,
     color: colors.text3,
     marginTop: 1,
+    letterSpacing: -0.1,
   },
   errorBanner: {
-    marginHorizontal: 20,
-    marginTop: 12,
-    padding: 12,
-    borderRadius: radii.lg,
+    marginHorizontal: space.gutter,
+    marginTop: space.sm,
+    padding: space.md,
+    borderRadius: 10,
     backgroundColor: colors.redSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(235,87,87,0.35)',
   },
   errorText: {
     fontSize: 13,
     fontWeight: '500',
-    color: colors.red,
+    color: '#f08a8a',
     lineHeight: 18,
+    letterSpacing: -0.1,
   },
   content: {
     flex: 1,

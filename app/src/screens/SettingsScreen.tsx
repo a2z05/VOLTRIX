@@ -2,14 +2,20 @@
  * Settings tab — every control maps 1:1 to a config.sh key; changes are
  * local until "Save settings" (writes keys, then auto-runs apply), while
  * "Apply now" simply re-runs charge.sh with whatever is already on disk.
+ *
+ * Redesigned as stacked section cards: caption headers with a tick, hairline
+ * row rhythm, and the rebuilt sliders sitting inline where the old controls
+ * were — same props, new feel. Sections spring in staggered.
  */
 import React from 'react';
 import {ScrollView, StyleSheet, View} from 'react-native';
+import Animated from 'react-native-reanimated';
 import {Button, Card, Row, SectionTitle} from '../components/ui';
 import {Slider} from '../components/Slider';
 import {Toggle} from '../components/Toggle';
 import {Settings} from '../native';
-import {colors} from '../theme';
+import {bentoIn} from '../anim';
+import {colors, space} from '../theme';
 
 function SliderRow({
   children,
@@ -40,8 +46,8 @@ export function SettingsScreen({
     <ScrollView
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}>
-      <View style={styles.section}>
-        <SectionTitle>Thermal</SectionTitle>
+      <Animated.View entering={bentoIn(0)}>
+        <SectionTitle hint="Temperature window">Thermal</SectionTitle>
         <Card>
           <Row
             title="Thermal management enabled"
@@ -75,10 +81,10 @@ export function SettingsScreen({
             />
           </SliderRow>
         </Card>
-      </View>
+      </Animated.View>
 
-      <View style={styles.section}>
-        <SectionTitle>Speed</SectionTitle>
+      <Animated.View entering={bentoIn(1)}>
+        <SectionTitle hint="Profile tuning">Speed</SectionTitle>
         <Card>
           <Row
             title="Disable Xiaomi throttles"
@@ -113,10 +119,10 @@ export function SettingsScreen({
             />
           </SliderRow>
         </Card>
-      </View>
+      </Animated.View>
 
-      <View style={styles.section}>
-        <SectionTitle>Charging</SectionTitle>
+      <Animated.View entering={bentoIn(2)}>
+        <SectionTitle hint="Limits & hold">Charging</SectionTitle>
         <Card>
           <Row
             title="Always keep fast charge"
@@ -140,39 +146,43 @@ export function SettingsScreen({
             />
           </SliderRow>
         </Card>
-      </View>
+      </Animated.View>
 
-      <View style={styles.actions}>
+      <Animated.View entering={bentoIn(3)} style={styles.actions}>
         <Button label="Apply now" onPress={onApply} busy={busy} />
-        <Button label="Save settings" variant="secondary" onPress={onSave} busy={busy} style={styles.actionGap} />
-      </View>
+        <Button
+          label="Save settings"
+          variant="secondary"
+          onPress={onSave}
+          busy={busy}
+          style={styles.actionGap}
+        />
+      </Animated.View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 48,
-  },
-  section: {
-    marginBottom: 22,
+    paddingHorizontal: space.gutter,
+    paddingTop: space.xs,
+    paddingBottom: 130,
   },
   sliderRow: {
-    paddingHorizontal: 16,
-    paddingTop: 4,
-    paddingBottom: 10,
+    paddingHorizontal: space.lg,
+    paddingTop: 2,
+    paddingBottom: space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    borderTopColor: colors.borderSubtle,
   },
   sliderRowLast: {
-    paddingBottom: 14,
+    paddingBottom: space.md,
   },
   actions: {
-    marginTop: 4,
+    marginTop: space.xl,
+    gap: space.sm,
   },
   actionGap: {
-    marginTop: 10,
+    marginTop: 0,
   },
 });

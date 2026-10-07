@@ -1,10 +1,15 @@
 /**
- * Compact bottom toast (old web .toast): dark pill, fades + slides in,
- * auto-hidden by the caller. Purely presentational.
+ * Bottom toast — dark floating chip that springs up over the tab bar,
+ * purely presentational (caller owns visibility timing).
  */
-import React, {useEffect, useRef} from 'react';
-import {Animated, Easing, StyleSheet, Text} from 'react-native';
-import {colors, radii} from '../theme';
+import React, {useEffect} from 'react';
+import {StyleSheet, Text} from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated';
+import {colors, radii, shadow} from '../theme';
 
 export function Toast({
   message,
@@ -13,32 +18,27 @@ export function Toast({
   message: string | null;
   bottomOffset?: number;
 }) {
-  const anim = useRef(new Animated.Value(0)).current;
   const visible = message != null;
+  const progress = useSharedValue(0);
 
   useEffect(() => {
-    Animated.timing(anim, {
-      toValue: visible ? 1 : 0,
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [visible, anim]);
+    progress.value = withSpring(visible ? 1 : 0, {
+      damping: 17,
+      stiffness: 220,
+      mass: 0.7,
+    });
+  }, [visible, progress]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: progress.value,
+    transform: [{translateY: (1 - progress.value) * 22}],
+  }));
 
   return (
     <Animated.View
       pointerEvents="none"
       accessibilityLiveRegion="polite"
-      style={[
-        styles.toast,
-        {bottom: bottomOffset},
-        {
-          opacity: anim,
-          transform: [
-            {translateY: anim.interpolate({inputRange: [0, 1], outputRange: [12, 0]})},
-          ],
-        },
-      ]}>
+      style={[styles.toast, {bottom: bottomOffset}, style]}>
       <Text style={styles.text} numberOfLines={3}>
         {message ?? ''}
       </Text>
@@ -51,20 +51,20 @@ const styles = StyleSheet.create({
     position: 'absolute',
     alignSelf: 'center',
     maxWidth: '88%',
-    backgroundColor: 'rgba(22,24,38,0.97)',
+    backgroundColor: 'rgba(25,26,27,0.98)',
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 15,
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    zIndex: 50,
-    elevation: 8,
+    borderRadius: radii.pill,
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    zIndex: 60,
+    ...shadow.float,
   },
   text: {
     fontSize: 13.5,
-    fontWeight: '600',
+    fontWeight: '500',
     color: colors.text,
     textAlign: 'center',
-    borderRadius: radii.md,
+    letterSpacing: -0.1,
   },
 });

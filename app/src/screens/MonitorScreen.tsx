@@ -1,19 +1,33 @@
 /**
- * Monitor tab — the face of the app: big battery card, live stats,
- * profile selector and the charger/thermal info rows.
+ * Monitor tab — the face of the app, rebuilt as a bento grid.
+ *
+ * Hero card: ring gauge of battery fill (spring-swept dot arc) with live
+ * power/temp/current cells. Below: profile chips (still drive runApply via
+ * the parent), then charger + thermal-gate half cards, then the detail rows.
+ * Every block enters with a staggered spring so hierarchy reads instantly.
  */
-import React from 'react';
-import {Pressable, ScrollView, StyleSheet, Text, View} from 'react-native';
-import {Badge, Card, Row, SectionTitle} from '../components/ui';
+import React, {useEffect} from 'react';
+import {ScrollView, StyleSheet, Text, View} from 'react-native';
+import Animated, {
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
+import {Badge, Card, Pill, PressableScale, Row, SectionTitle} from '../components/ui';
+import {RingGauge} from '../components/RingGauge';
 import {VoltrixState} from '../native';
-import {colors, radii} from '../theme';
+import {bentoIn} from '../anim';
+import {colors, radii, shadow, space} from '../theme';
 
 export type ProfileKey = 'balanced' | 'performance' | 'battery_saver';
 
-const PROFILES: Array<{key: ProfileKey; icon: string; name: string}> = [
-  {key: 'balanced', icon: '⚖️', name: 'Balanced'},
-  {key: 'performance', icon: '🚀', name: 'Performance'},
-  {key: 'battery_saver', icon: '🌿', name: 'Saver'},
+const PROFILES: Array<{key: ProfileKey; name: string}> = [
+  {key: 'balanced', name: 'Balanced'},
+  {key: 'performance', name: 'Performance'},
+  {key: 'battery_saver', name: 'Saver'},
 ];
 
 const PROFILE_NAMES: Record<ProfileKey, string> = {
@@ -22,11 +36,60 @@ const PROFILE_NAMES: Record<ProfileKey, string> = {
   battery_saver: 'Battery saver',
 };
 
-function StatTile({value, label}: {value: string; label: string}) {
+/* --------------------------------------------------- view-drawn glyphs ---- */
+
+function ProfileGlyph({kind, color}: {kind: ProfileKey; color: string}) {
+  if (kind === 'performance') {
+    const hs = [6, 10, 14];
+    return (
+      <View style={styles.glyphRow}>
+        {hs.map((h, i) => (
+          <View
+            key={i}
+            style={{width: 3, height: h, borderRadius: 2, backgroundColor: color}}
+          />
+        ))}
+      </View>
+    );
+  }
+  if (kind === 'battery_saver') {
+    // crescent: filled circle with a bg-colored disc knocked out of it
+    return (
+      <View style={styles.glyphWrap}>
+        <View style={[styles.moon, {backgroundColor: color}]} />
+        <View style={[styles.moonCut, {backgroundColor: colors.card}]} />
+      </View>
+    );
+  }
+  // balanced: barbell / balance bar
   return (
-    <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
+    <View style={styles.glyphRow}>
+      <View style={[styles.balDot, {backgroundColor: color}]} />
+      <View style={[styles.balBar, {backgroundColor: color}]} />
+      <View style={[styles.balDot, {backgroundColor: color}]} />
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------- cells ----- */
+
+function StatCell({
+  label,
+  value,
+  tone = 'default',
+}: {
+  label: string;
+  value: string;
+  tone?: 'default' | 'accent' | 'hot';
+}) {
+  const valueColor =
+    tone === 'accent' ? colors.accentHover : tone === 'hot' ? '#ebab44' : colors.text;
+  return (
+    <View style={styles.cell}>
+      <Text style={[styles.cellValue, {color: valueColor}]} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={styles.cellLabel}>{label}</Text>
     </View>
   );
 }
@@ -40,6 +103,8 @@ function calibrationLabel(v: string | undefined): string {
   }
   return 'Not calibrated yet';
 }
+
+/* -------------------------------------------------------------- screen ---- */
 
 export function MonitorScreen({
   state,
@@ -57,218 +122,357 @@ export function MonitorScreen({
   const capacity = state?.capacity;
   const gateActive = state?.thermal_gate_active;
   const chargerType = state?.charger_type_detected;
+  const temp = state?.temp_c;
+
+  const breathe = useSharedValue(0.25);
+  useEffect(() => {
+    if (isCharging) {
+      breathe.value = withRepeat(
+        withSequence(
+          withTiming(1, {duration: 1150}),
+          withTiming(0.3, {duration: 1150}),
+        ),
+        -1,
+        true,
+      );
+    } else {
+      cancelAnimation(breathe);
+      breathe.value = withTiming(0.18, {duration: 400});
+    }
+  }, [isCharging, breathe]);
+
+  const haloStyle = useAnimatedStyle(() => ({opacity: breathe.value}));
+
+  const profileName =
+    profile in PROFILE_NAMES ? PROFILE_NAMES[profile as ProfileKey] : String(profile);
+  const tempTone: 'default' | 'accent' | 'hot' =
+    temp == null ? 'default' : temp >= 45 ? 'hot' : temp >= 41 ? 'accent' : 'default';
 
   return (
     <ScrollView
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}>
-      {/* Battery hero card */}
-      <View style={[styles.batteryCard, isCharging && styles.batteryCardCharging]}>
-        <Text style={styles.capacity}>{capacity != null ? `${capacity}%` : '—%'}</Text>
-        <Text style={styles.statusLine}>
-          {status}
-          {' · '}
-          {profile in PROFILE_NAMES
-            ? PROFILE_NAMES[profile as ProfileKey]
-            : String(profile)}
-        </Text>
-        <View style={styles.statsRow}>
-          <StatTile value={state?.temp_c != null ? `${state.temp_c}°C` : '—'} label="Temp" />
-          <StatTile value={state?.power_w != null ? `${state.power_w}W` : '—'} label="Power" />
-          <StatTile
-            value={state?.current_ma != null ? `${state.current_ma}mA` : '—'}
-            label="Current"
-          />
-        </View>
-        {isCharging ? <Text style={styles.chargingHint}>⚡ Charging</Text> : null}
-      </View>
+      {/* ------------------------------------------------ hero status card */}
+      <Animated.View entering={bentoIn(0)}>
+        <View style={styles.hero}>
+          <View style={styles.heroTop}>
+            <Pill
+              text={state ? status : 'Waiting'}
+              tone={isCharging ? 'accent' : 'default'}
+              dot={isCharging}
+            />
+            <Pill text={profileName} tone="default" />
+          </View>
 
-      {/* Profile selector */}
-      <View style={styles.section}>
-        <SectionTitle>Profile</SectionTitle>
+          <View style={styles.heroMain}>
+            <View style={styles.gaugeBox}>
+              <Animated.View style={[styles.gaugeHalo, haloStyle]} />
+              <RingGauge progress={capacity != null ? capacity / 100 : 0} size={158}>
+                <Text style={styles.capacity}>
+                  {capacity != null ? `${capacity}%` : '—%'}
+                </Text>
+                <Text style={styles.capacityLabel}>Battery</Text>
+              </RingGauge>
+            </View>
+
+            <View style={styles.heroCells}>
+              <StatCell
+                label="Power"
+                value={state?.power_w != null ? `${state.power_w}W` : '—'}
+                tone={isCharging ? 'accent' : 'default'}
+              />
+              <View style={styles.cellRow}>
+                <StatCell
+                  label="Temp"
+                  value={temp != null ? `${temp}°C` : '—'}
+                  tone={tempTone}
+                />
+                <StatCell
+                  label="Current"
+                  value={state?.current_ma != null ? `${state.current_ma}mA` : '—'}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Animated.View>
+
+      {/* -------------------------------------------------------- profiles */}
+      <Animated.View entering={bentoIn(1)} style={styles.section}>
+        <SectionTitle hint={busy ? 'Applying…' : undefined}>Profile</SectionTitle>
         <View style={styles.profilesRow}>
           {PROFILES.map(p => {
             const on = p.key === profile;
             return (
-              <Pressable
+              <PressableScale
                 key={p.key}
                 accessibilityRole="button"
-                accessibilityState={{selected: on}}
+                accessibilityState={{selected: on, disabled: busy}}
                 disabled={busy}
                 onPress={() => onSelectProfile(p.key)}
-                style={({pressed}) => [
+                containerStyle={styles.profileWrap}
+                style={[
                   styles.profileCard,
                   on && styles.profileCardOn,
-                  busy && styles.profileBusy,
-                  pressed && styles.pressed,
+                  busy && styles.busyDim,
                 ]}>
-                <Text style={styles.profileIcon}>{p.icon}</Text>
+                <ProfileGlyph kind={p.key} color={on ? colors.accentHover : colors.text3} />
                 <Text style={[styles.profileName, on && styles.profileNameOn]}>
                   {p.name}
                 </Text>
-              </Pressable>
+              </PressableScale>
             );
           })}
         </View>
+      </Animated.View>
+
+      {/* -------------------------------------------- charger + gate (bento) */}
+      <View style={styles.halfRow}>
+        <Animated.View entering={bentoIn(2)} style={styles.half}>
+          <Card style={styles.halfCard}>
+            <Text style={styles.halfLabel}>Charger</Text>
+            <Text style={styles.halfValue} numberOfLines={1}>
+              {(chargerType ?? '—').toUpperCase()}
+            </Text>
+            <Text style={styles.halfSub}>Detected type</Text>
+          </Card>
+        </Animated.View>
+        <Animated.View entering={bentoIn(3)} style={styles.half}>
+          <Card style={styles.halfCard}>
+            <Text style={styles.halfLabel}>Thermal gate</Text>
+            <Text
+              style={[
+                styles.halfValue,
+                {color: gateActive ? colors.accentHover : colors.emerald},
+              ]}>
+              {gateActive == null ? '—' : gateActive ? 'Fast' : 'Protected'}
+            </Text>
+            <Text style={styles.halfSub}>Live state</Text>
+          </Card>
+        </Animated.View>
       </View>
 
-      {/* Charger / thermal info */}
-      <View style={styles.section}>
-        <SectionTitle>Charger</SectionTitle>
+      {/* -------------------------------------------------- details card */}
+      <Animated.View entering={bentoIn(4)} style={styles.section}>
+        <SectionTitle>Details</SectionTitle>
         <Card>
           <Row
-            title="Type"
-            right={
-              <Badge
-                text={(chargerType ?? '—').toUpperCase()}
-                tone={chargerType && chargerType !== 'unknown' ? 'accent' : 'default'}
-              />
-            }
-          />
-          <Row
-            title="Thermal Gate"
-            subtitle="Live state"
-            right={
-              gateActive == null ? (
-                <Badge text="—" />
-              ) : (
-                <Badge text={gateActive ? 'Fast' : 'Protected'} tone={gateActive ? 'bad' : 'ok'} />
-              )
-            }
-          />
-          <Row
-            title="Charge Level"
+            title="Charge level"
             subtitle="0–16 step"
-            right={<Badge text={state?.charge_level != null ? `${state.charge_level}/16` : '—'} />}
+            right={
+              <Badge text={state?.charge_level != null ? `${state.charge_level}/16` : '—'} />
+            }
           />
-          <Row title="Speed Calibration" right={<Badge text={calibrationLabel(state?.level_calibration)} />} />
           <Row
-            title="Writable Nodes"
-            right={<Badge text={state?.avail_total != null ? `${state.avail_total}/7` : '—'} />}
+            title="Speed calibration"
+            right={<Badge text={calibrationLabel(state?.level_calibration)} />}
+          />
+          <Row
+            title="Writable nodes"
+            right={
+              <Badge text={state?.avail_total != null ? `${state.avail_total}/7` : '—'} />
+            }
             last
           />
         </Card>
-      </View>
+      </Animated.View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   content: {
-    paddingHorizontal: 20,
-    paddingTop: 22,
-    paddingBottom: 48,
+    paddingHorizontal: space.gutter,
+    paddingTop: space.md,
+    paddingBottom: 130, // clears the floating tab bar
   },
-  batteryCard: {
-    backgroundColor: colors.surface2,
+  hero: {
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
     borderRadius: radii.xl,
-    padding: 26,
-    shadowColor: '#000000',
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    shadowOffset: {width: 0, height: 10},
-    elevation: 5,
+    padding: space.lg,
+    ...shadow.hero,
   },
-  batteryCardCharging: {
-    borderColor: colors.accent,
-    shadowColor: colors.accent,
-    shadowOpacity: 0.35,
-    shadowRadius: 22,
+  heroTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: space.md,
+  },
+  heroMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.lg,
+  },
+  gaugeBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gaugeHalo: {
+    position: 'absolute',
+    left: -10,
+    top: -10,
+    width: 178,
+    height: 178,
+    borderRadius: 89,
+    borderWidth: 2,
+    borderColor: colors.accentGlow,
+    opacity: 0.25,
   },
   capacity: {
-    fontSize: 52,
-    fontWeight: '800',
-    lineHeight: 56,
-    letterSpacing: -1.2,
+    fontSize: 40,
+    lineHeight: 44,
+    fontWeight: '600',
+    letterSpacing: -1.4,
     color: colors.text,
     fontVariant: ['tabular-nums'],
   },
-  statusLine: {
-    fontSize: 13.5,
-    fontWeight: '500',
-    color: colors.text2,
-    marginTop: 6,
+  capacityLabel: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
+    color: colors.text4,
+    marginTop: 4,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 20,
-  },
-  stat: {
+  heroCells: {
     flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.03)',
+    gap: space.sm,
+    minWidth: 0,
+  },
+  cellRow: {
+    flexDirection: 'row',
+    gap: space.sm,
+  },
+  cell: {
+    flex: 1,
+    backgroundColor: colors.cardInset,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     borderRadius: radii.md,
-    paddingVertical: 12,
+    paddingVertical: 11,
     paddingHorizontal: 8,
     alignItems: 'center',
+    minWidth: 0,
   },
-  statValue: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.gold,
-    fontVariant: ['tabular-nums'],
-  },
-  statLabel: {
-    fontSize: 10.5,
+  cellValue: {
+    fontSize: 16,
     fontWeight: '600',
-    color: colors.text3,
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.3,
+  },
+  cellLabel: {
+    fontSize: 9,
+    fontWeight: '600',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
+    color: colors.text4,
     marginTop: 3,
   },
-  chargingHint: {
-    marginTop: 14,
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: colors.accent,
-  },
   section: {
-    marginTop: 22,
+    marginTop: space.xl,
   },
   profilesRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: space.sm,
+  },
+  profileWrap: {
+    flex: 1,
   },
   profileCard: {
-    flex: 1,
-    backgroundColor: 'rgba(30,33,51,0.6)',
+    backgroundColor: colors.card,
     borderWidth: 1.5,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
     borderRadius: radii.lg,
-    paddingVertical: 16,
-    paddingHorizontal: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
     alignItems: 'center',
+    gap: 8,
   },
   profileCardOn: {
-    borderColor: colors.accent,
-    backgroundColor: 'rgba(94,124,255,0.18)',
-    shadowColor: colors.accent,
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    shadowOffset: {width: 0, height: 4},
-    elevation: 3,
+    borderColor: 'rgba(113,112,255,0.65)',
+    backgroundColor: colors.accentSofter,
   },
-  profileBusy: {
-    opacity: 0.6,
-  },
-  pressed: {
-    opacity: 0.75,
-  },
-  profileIcon: {
-    fontSize: 23,
-    marginBottom: 6,
+  busyDim: {
+    opacity: 0.55,
   },
   profileName: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
-    color: colors.text2,
+    color: colors.text3,
     textAlign: 'center',
+    letterSpacing: -0.05,
   },
   profileNameOn: {
     color: colors.text,
+  },
+  halfRow: {
+    flexDirection: 'row',
+    gap: space.sm,
+    marginTop: space.xl,
+  },
+  half: {
+    flex: 1,
+    minWidth: 0,
+  },
+  halfCard: {
+    paddingVertical: 14,
+    paddingHorizontal: space.lg,
+  },
+  halfLabel: {
+    fontSize: 9.5,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    color: colors.text4,
+  },
+  halfValue: {
+    fontSize: 21,
+    fontWeight: '600',
+    letterSpacing: -0.5,
+    color: colors.text,
+    marginTop: 7,
+    fontVariant: ['tabular-nums'],
+  },
+  halfSub: {
+    fontSize: 11.5,
+    color: colors.text3,
+    marginTop: 3,
+  },
+  /* --- glyphs ---------------------------------------------------------- */
+  glyphRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    height: 14,
+  },
+  glyphWrap: {
+    width: 14,
+    height: 14,
+  },
+  moon: {
+    position: 'absolute',
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+  },
+  moonCut: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    left: 5,
+    top: -1,
+  },
+  balDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 3,
+  },
+  balBar: {
+    width: 14,
+    height: 3,
+    borderRadius: 2,
   },
 });

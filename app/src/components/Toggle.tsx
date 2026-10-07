@@ -1,15 +1,25 @@
 /**
- * 48x28 switch matching the old web .tgl control (accent track, white knob).
- * Hand-rolled so we don't add any dependency beyond react-native.
+ * Switch control — reanimated rebuild of the old 48x28 web toggle.
+ * Knob springs across the track, the track crossfades between idle and
+ * accent fills (two stacked layers, so no color interpolation), and the
+ * whole control dips slightly under the finger.
  */
-import React, {useEffect, useRef} from 'react';
-import {Animated, Easing, Pressable, StyleSheet} from 'react-native';
+import React, {useEffect} from 'react';
+import {Pressable, StyleSheet} from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import {colors} from '../theme';
 
-const TRACK_W = 48;
-const TRACK_H = 28;
-const KNOB = 22;
-const TRAVEL = TRACK_W - KNOB - 6;
+const TRACK_W = 46;
+const TRACK_H = 26;
+const KNOB = 20;
+const TRAVEL = TRACK_W - KNOB - 3;
+
+const SPRING = {damping: 16, stiffness: 260};
 
 export function Toggle({
   value,
@@ -22,21 +32,25 @@ export function Toggle({
   disabled?: boolean;
   accessibilityLabel?: string;
 }) {
-  const anim = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const on = useSharedValue(value ? 1 : 0);
+  const press = useSharedValue(1);
 
   useEffect(() => {
-    Animated.timing(anim, {
-      toValue: value ? 1 : 0,
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [value, anim]);
+    on.value = withSpring(value ? 1 : 0, SPRING);
+  }, [value, on]);
 
-  const trackColor = anim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.surface3, colors.accent],
-  });
+  const trackStyle = useAnimatedStyle(() => ({
+    transform: [{scale: press.value}],
+  }));
+
+  const activeFillStyle = useAnimatedStyle(() => ({opacity: on.value}));
+
+  const knobStyle = useAnimatedStyle(() => ({
+    transform: [
+      {translateX: 3 + on.value * TRAVEL},
+      {scale: press.value},
+    ],
+  }));
 
   return (
     <Pressable
@@ -46,23 +60,16 @@ export function Toggle({
       disabled={disabled}
       hitSlop={8}
       onPress={() => onValueChange(!value)}
+      onPressIn={() => {
+        press.value = withTiming(0.93, {duration: 80});
+      }}
+      onPressOut={() => {
+        press.value = withTiming(1, {duration: 140});
+      }}
       style={disabled ? styles.disabled : undefined}>
-      <Animated.View style={[styles.track, {backgroundColor: trackColor}]}>
-        <Animated.View
-          style={[
-            styles.knob,
-            {
-              transform: [
-                {
-                  translateX: anim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [3, 3 + TRAVEL],
-                  }),
-                },
-              ],
-            },
-          ]}
-        />
+      <Animated.View style={[styles.track, trackStyle]}>
+        <Animated.View style={[styles.fillActive, activeFillStyle]} />
+        <Animated.View style={[styles.knob, knobStyle]} />
       </Animated.View>
     </Pressable>
   );
@@ -74,6 +81,19 @@ const styles = StyleSheet.create({
     height: TRACK_H,
     borderRadius: TRACK_H / 2,
     justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+  },
+  fillActive: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: colors.accent,
+    borderRadius: TRACK_H / 2,
   },
   knob: {
     width: KNOB,
@@ -81,9 +101,9 @@ const styles = StyleSheet.create({
     borderRadius: KNOB / 2,
     backgroundColor: colors.white,
     shadowColor: '#000000',
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    shadowOffset: {width: 0, height: 2},
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
+    shadowOffset: {width: 0, height: 1},
     elevation: 2,
   },
   disabled: {
