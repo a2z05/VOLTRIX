@@ -34,6 +34,13 @@ object NotificationHelper {
   private const val CHANNEL_ID = "voltrix_fast"
   private const val NOTIF_ID = 6701
 
+  /**
+   * The card lingers for a little while, then goes: the system cancels it this
+   * long after it was posted. Every re-post (state change, toggle) restarts the
+   * clock, and an explicit cancel (charger unplugged) still wins immediately.
+   */
+  private const val CARD_TIMEOUT_MS = 30_000L
+
   const val ACTION_TOGGLE = "com.vnerxy.voltrix.TOGGLE_67W"
   const val ACTION_DISMISS = "com.vnerxy.voltrix.DISMISS"
 
@@ -107,9 +114,9 @@ object NotificationHelper {
     // RemoteViews has no setTextViewTextColor; the reflection setter is the standard way.
     rv.setInt(R.id.notif_status, "setTextColor", color)
     rv.setImageViewResource(R.id.notif_toggle, toggleIcon)
-    // The spinner only shows while the apply runs; the switch hides during it.
-    rv.setViewVisibility(
-        R.id.notif_progress, if (state == State.ACTIVATING) View.VISIBLE else View.GONE)
+    // The small spinner stays visible the whole time — the card is "alive"
+    // whenever it is on screen; the switch hides while the apply runs.
+    rv.setViewVisibility(R.id.notif_progress, View.VISIBLE)
     rv.setViewVisibility(
         R.id.notif_toggle, if (state == State.ACTIVATING) View.GONE else View.VISIBLE)
 
@@ -134,7 +141,8 @@ object NotificationHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
 
     val builder =
-        if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, CHANNEL_ID)
+        if (Build.VERSION.SDK_INT >= 26)
+            Notification.Builder(context, CHANNEL_ID).setTimeoutAfter(CARD_TIMEOUT_MS)
         else Notification.Builder(context)
     builder
         .setSmallIcon(R.drawable.voltrix_bolt)

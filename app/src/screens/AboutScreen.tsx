@@ -32,7 +32,7 @@ export function AboutScreen() {
             </View>
           </View>
           <Text style={styles.title}>VOLTRIX</Text>
-          <Text style={styles.version}>Version 1.0</Text>
+          <Text style={styles.version}>Version 1.0.5</Text>
           <Text style={styles.credit}>Crafted by a2z (Vnerxy)</Text>
 
           <PressableScale

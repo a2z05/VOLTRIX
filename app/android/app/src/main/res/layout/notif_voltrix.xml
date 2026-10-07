@@ -37,7 +37,7 @@
         style="?android:attr/progressBarStyleSmall"
         android:layout_width="24dp" android:layout_height="24dp"
         android:indeterminate="true"
-        android:visibility="gone"/>
+        android:visibility="visible"/>
 
     <ImageView
         android:id="@+id/notif_toggle"
