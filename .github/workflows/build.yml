@@ -85,7 +85,9 @@ jobs:
         run: |
           VERSION=$(grep '^version=' module/module.prop | cut -d= -f2)
           mkdir -p module/app
-          cp app/android/app/build/outputs/apk/release/app-release.apk module/app/VOLTRIX.apk
+          APK_PATH=$(ls app/android/app/build/outputs/apk/release/*.apk | head -1)
+          echo "Using $APK_PATH"
+          cp "$APK_PATH" module/app/VOLTRIX.apk
           (cd module && zip -qr "../VOLTRIX-${VERSION}.zip" .)
           echo "Packaged VOLTRIX-${VERSION}.zip:"
           unzip -l "VOLTRIX-${VERSION}.zip" | tail -5
@@ -96,7 +98,7 @@ jobs:
           name: VOLTRIX-build
           path: |
             VOLTRIX-*.zip
-            app/android/app/build/outputs/apk/release/app-release.apk
+            app/android/app/build/outputs/apk/release/*.apk
           if-no-files-found: error
 
       - name: Create or update release
@@ -105,7 +107,7 @@ jobs:
         run: |
           VERSION=$(grep '^version=' module/module.prop | cut -d= -f2)
           TAG="v${VERSION#v}"
-          APK=app/android/app/build/outputs/apk/release/app-release.apk
+          APK=$(ls app/android/app/build/outputs/apk/release/*.apk | head -1)
           NOTES="VOLTRIX ${VERSION} — Magisk/KernelSU module zip + companion APK, built by CI."
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "VOLTRIX-${VERSION}.zip" "$APK" --clobber
