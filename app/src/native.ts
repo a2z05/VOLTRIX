@@ -88,6 +88,46 @@ export async function checkRoot(): Promise<boolean> {
 }
 
 /** Reads state.json; `{}` when the file does not exist yet, null when unusable. */
+/**
+ * Live battery snapshot: one root call straight to sysfs, bypassing state.json
+ * so wattage/percent/temp move every couple of seconds. Null on any failure —
+ * callers fall back to the state.json values.
+ */
+export async function readBatteryLive(): Promise<Partial<VoltrixState> | null> {
+  try {
+    const res = await exec(
+      'b=/sys/class/power_supply/battery; for f in capacity status temp voltage_now current_now; do ' +
+        'echo "$f=$(cat $b/$f 2>/dev/null)"; done',
+    );
+    if (res.code !== 0) {
+      return null;
+    }
+    const map: Record<string, string> = {};
+    for (const line of res.stdout.split('\n')) {
+      const i = line.indexOf('=');
+      if (i > 0) {
+        map[line.slice(0, i)] = line.slice(i + 1).trim();
+      }
+    }
+    if (!map.capacity) {
+      return null;
+    }
+    const curMa = Math.round(Math.abs(Number(map.current_now) || 0) / 1000);
+    const voltMv = Math.round((Number(map.voltage_now) || 0) / 1000);
+    return {
+      capacity: Number(map.capacity) || 0,
+      status: map.status || undefined,
+      temp_c: Math.round((Number(map.temp) || 0) / 10),
+      voltage_mv: voltMv,
+      current_ma: curMa,
+      power_w: voltMv && curMa ? Number(((voltMv * curMa) / 1000000).toFixed(1)) : 0,
+      ts: Math.floor(Date.now() / 1000),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function readState(): Promise<VoltrixState | null> {
   const raw = await execOk(
     `cat '${PATHS.state}' 2>/dev/null || echo {}`,
@@ -181,6 +221,13 @@ export interface Settings {
   performanceMa: number;
   alwaysFast: boolean;
   chargeLimit: number;
+  /**
+   * Night charge: slow-cruise so the battery lands on `nightTarget` percent by
+   * `nightBy` (minutes after midnight) instead of finishing early overnight.
+   */
+  nightEnabled: boolean;
+  nightTarget: number;
+  nightBy: number;
 }
 
 /** Defaults exactly as load_cfg() in module/script/charge.sh. */
@@ -193,7 +240,31 @@ export const DEFAULT_SETTINGS: Settings = {
   performanceMa: 13400,
   alwaysFast: false,
   chargeLimit: 0,
+  nightEnabled: false,
+  nightTarget: 80,
+  nightBy: 420, // 07:00
 };
+
+/** "0700" / "07:00" -> minutes after midnight (invalid input -> 07:00). */
+function hhmmToMinutes(v: unknown): number {
+  const digits = String(v ?? '').replace(/[^0-9]/g, '');
+  if (digits.length === 4) {
+    const h = Number(digits.slice(0, 2));
+    const m = Number(digits.slice(2));
+    if (h < 24 && m < 60) {
+      return h * 60 + m;
+    }
+  }
+  return 420;
+}
+
+/** Minutes after midnight -> "0700" (config-safe charset, no colon). */
+function minutesToHhmm(mins: number): string {
+  const clamped = Math.max(0, Math.min(1439, Math.round(mins)));
+  return `${String(Math.floor(clamped / 60)).padStart(2, '0')}${String(
+    clamped % 60,
+  ).padStart(2, '0')}`;
+}
 
 function num(v: string | undefined, dflt: number, min: number, max: number): number {
   const n = v == null ? NaN : Number(v);
@@ -232,6 +303,9 @@ export function settingsFromConfig(cfg: ConfigMap): Settings {
     performanceMa: num(cfg.PERFORMANCE_MA, DEFAULT_SETTINGS.performanceMa, 1000, 13400),
     alwaysFast: bool(cfg.ALWAYS_FAST, DEFAULT_SETTINGS.alwaysFast),
     chargeLimit: num(cfg.CHARGE_LIMIT, DEFAULT_SETTINGS.chargeLimit, 0, 100),
+    nightEnabled: bool(cfg.NIGHT_ENABLED, DEFAULT_SETTINGS.nightEnabled),
+    nightTarget: num(cfg.NIGHT_TARGET, DEFAULT_SETTINGS.nightTarget, 50, 100),
+    nightBy: hhmmToMinutes(cfg.NIGHT_BY),
   };
 }
 
@@ -292,6 +366,9 @@ export async function writeSettings(s: Settings): Promise<void> {
     ['PERFORMANCE_MA', String(s.performanceMa)],
     ['ALWAYS_FAST', s.alwaysFast ? 'true' : 'false'],
     ['CHARGE_LIMIT', String(s.chargeLimit)],
+    ['NIGHT_ENABLED', s.nightEnabled ? 'true' : 'false'],
+    ['NIGHT_TARGET', String(Math.round(s.nightTarget))],
+    ['NIGHT_BY', minutesToHhmm(s.nightBy)],
   ];
   for (const [key, value] of pairs) {
     await cfgSet(key, value);

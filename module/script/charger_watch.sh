@@ -38,6 +38,10 @@ get_temp_raw() {
     [ -r "$BATT/temp" ] && cat "$BATT/temp" 2>/dev/null || echo ""
 }
 
+get_cap() {
+    [ -r "$BATT/capacity" ] && cat "$BATT/capacity" 2>/dev/null || echo 0
+}
+
 CHARGING_POLL_SECONDS=60
 TEMP_CHANGE_THRESHOLD_TENTHS=5
 IDLE_POLL_SECONDS=300
@@ -56,6 +60,8 @@ log "Charger watcher starting (adaptive: ${CHARGING_POLL_SECONDS}s charging / ${
 last_status=$(get_status)
 last_temp_raw=$(get_temp_raw)
 last_full_apply_ts=0
+night_target_hit=0
+night_suspended=0
 checks=0
 MAX_CHECKS=4000
 
@@ -101,11 +107,27 @@ while [ "$checks" -lt "$MAX_CHECKS" ]; do
                     [ "$diff" -ge "$TEMP_CHANGE_THRESHOLD_TENTHS" ] && temp_changed=1
                 fi
                 time_since_last=$((now_ts - last_full_apply_ts))
-                if [ "$temp_changed" = "1" ] || [ "$time_since_last" -ge 600 ]; then
-                    log "Re-check (temp_changed=$temp_changed, ${time_since_last}s since last) — full apply"
+                recheck_after=600
+                if [ "$NIGHT_ENABLED" = "true" ] 2>/dev/null; then
+                    # Night schedule active: recheck twice as often so phase
+                    # flips (slow -> final hour) land within 5 minutes, and
+                    # fire ONE apply the moment the target is reached so the
+                    # module suspends there instead of coasting past it.
+                    recheck_after=300
+                    ncap=$(get_cap)
+                    if [ "$ncap" -lt "$NIGHT_TARGET" ] 2>/dev/null; then
+                        night_suspended=0
+                    elif [ "$night_suspended" = "0" ]; then
+                        night_target_hit=1
+                    fi
+                fi
+                if [ "$temp_changed" = "1" ] || [ "$night_target_hit" = "1" ] || [ "$time_since_last" -ge "$recheck_after" ]; then
+                    log "Re-check (temp=$temp_changed hit=${night_target_hit}x, ${time_since_last}s since last) — full apply"
                     sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
                     last_full_apply_ts=$now_ts
                     last_temp_raw=$current_temp_raw
+                    night_target_hit=0
+                    [ "${ncap:-0}" -ge "${NIGHT_TARGET:-999}" ] 2>/dev/null && night_suspended=1
                 fi
             fi
             ;;
@@ -117,6 +139,10 @@ while [ "$checks" -lt "$MAX_CHECKS" ]; do
             fi
             ;;
     esac
+
+    # Refresh state.json each cycle — the app polls it for live numbers
+    # (edge applies already rewrite it; this keeps idle + steady phases fresh).
+    sh "$APPLY_SCRIPT" --state-only >> "$LOG" 2>&1
 
     last_status="$current_status"
     checks=$((checks + 1))

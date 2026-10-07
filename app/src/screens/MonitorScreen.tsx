@@ -24,10 +24,10 @@ import {colors, radii, shadow, space} from '../theme';
 
 export type ProfileKey = 'balanced' | 'performance' | 'battery_saver';
 
-const PROFILES: Array<{key: ProfileKey; name: string}> = [
-  {key: 'balanced', name: 'Balanced'},
-  {key: 'performance', name: 'Performance'},
-  {key: 'battery_saver', name: 'Saver'},
+const PROFILES: Array<{key: ProfileKey; name: string; subtitle: string}> = [
+  {key: 'balanced', name: 'Balanced', subtitle: 'Everyday — quick charge without the heat'},
+  {key: 'performance', name: 'Performance', subtitle: 'Fastest — full current for urgent top-ups'},
+  {key: 'battery_saver', name: 'Battery saver', subtitle: 'Overnight & hot days — slowest and coolest'},
 ];
 
 const PROFILE_NAMES: Record<ProfileKey, string> = {
@@ -199,31 +199,40 @@ export function MonitorScreen({
 
       {/* -------------------------------------------------------- profiles */}
       <Animated.View entering={bentoIn(1)} style={styles.section}>
-        <SectionTitle hint={busy ? 'Applying…' : undefined}>Profile</SectionTitle>
-        <View style={styles.profilesRow}>
-          {PROFILES.map(p => {
+        <SectionTitle hint={busy ? 'Applying…' : 'What each one is for'}>Profile</SectionTitle>
+        <Card>
+          {PROFILES.map((p, idx) => {
             const on = p.key === profile;
             return (
               <PressableScale
                 key={p.key}
                 accessibilityRole="button"
                 accessibilityState={{selected: on, disabled: busy}}
+                accessibilityLabel={`${p.name} — ${p.subtitle}`}
                 disabled={busy}
                 onPress={() => onSelectProfile(p.key)}
-                containerStyle={styles.profileWrap}
                 style={[
-                  styles.profileCard,
-                  on && styles.profileCardOn,
+                  styles.profileRow,
+                  idx < PROFILES.length - 1 && styles.profileRowBorder,
+                  on && styles.profileRowOn,
                   busy && styles.busyDim,
                 ]}>
                 <ProfileGlyph kind={p.key} color={on ? colors.accentHover : colors.text3} />
-                <Text style={[styles.profileName, on && styles.profileNameOn]}>
-                  {p.name}
-                </Text>
+                <View style={styles.profileTexts}>
+                  <Text style={[styles.profileName, on && styles.profileNameOn]}>
+                    {p.name}
+                  </Text>
+                  <Text style={styles.profileDesc} numberOfLines={2}>
+                    {p.subtitle}
+                  </Text>
+                </View>
+                <View style={[styles.profileCheck, on && styles.profileCheckOn]}>
+                  {on ? <Text style={styles.profileCheckMark}>✓</Text> : null}
+                </View>
               </PressableScale>
             );
           })}
-        </View>
+        </Card>
       </Animated.View>
 
       {/* -------------------------------------------- charger + gate (bento) */}
@@ -373,39 +382,62 @@ const styles = StyleSheet.create({
   section: {
     marginTop: space.xl,
   },
-  profilesRow: {
+  profileRow: {
     flexDirection: 'row',
-    gap: space.sm,
-  },
-  profileWrap: {
-    flex: 1,
-  },
-  profileCard: {
-    backgroundColor: colors.card,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    paddingVertical: 14,
-    paddingHorizontal: 6,
     alignItems: 'center',
-    gap: 8,
+    gap: space.sm + 2,
+    paddingVertical: 13,
+    paddingHorizontal: space.md,
+    borderRadius: radii.md,
   },
-  profileCardOn: {
-    borderColor: 'rgba(113,112,255,0.65)',
+  profileRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    borderRadius: 0,
+  },
+  profileRowOn: {
     backgroundColor: colors.accentSofter,
+    borderRadius: radii.md,
+  },
+  profileTexts: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
   busyDim: {
     opacity: 0.55,
   },
   profileName: {
-    fontSize: 11.5,
+    fontSize: 14.5,
     fontWeight: '600',
-    color: colors.text3,
-    textAlign: 'center',
-    letterSpacing: -0.05,
+    color: colors.text,
+    letterSpacing: -0.2,
   },
   profileNameOn: {
-    color: colors.text,
+    color: colors.accentHover,
+  },
+  profileDesc: {
+    fontSize: 11.5,
+    lineHeight: 15.5,
+    color: colors.text3,
+  },
+  profileCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileCheckOn: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  profileCheckMark: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   halfRow: {
     flexDirection: 'row',

@@ -47,6 +47,7 @@ import {
   getPref,
   isNotifStyle,
   loadConfig,
+  readBatteryLive,
   readState,
   runApplyScript,
   setPref,
@@ -64,6 +65,9 @@ const TABS: TabDef[] = [
 ];
 
 const POLL_MS = 4000;
+// Direct sysfs battery reads (wattage/percent/temp) — the live layer that
+// keeps hero numbers moving between the watcher's once-a-minute state writes.
+const LIVE_MS = 2000;
 const PROFILE_KEYS: ProfileKey[] = ['balanced', 'performance', 'battery_saver'];
 
 const PROFILE_LABELS: Record<ProfileKey, string> = {
@@ -177,6 +181,27 @@ function AppInner() {
     const id = setInterval(refresh, POLL_MS);
     return () => clearInterval(id);
   }, [rootState, appState, refresh]);
+
+  // --- live battery overlay (Monitor tab, foreground only) ------------------
+  const [liveSnap, setLiveSnap] = useState<Partial<VoltrixState> | null>(null);
+  useEffect(() => {
+    if (rootState !== 'ok' || appState !== 'active' || tab !== 'monitor') {
+      return;
+    }
+    let alive = true;
+    const fetchLive = async () => {
+      const snap = await readBatteryLive();
+      if (alive) {
+        setLiveSnap(snap);
+      }
+    };
+    fetchLive();
+    const id = setInterval(fetchLive, LIVE_MS);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [rootState, appState, tab]);
 
   // "Updated Xs ago" ticker — only ticks while a state with ts exists.
   useEffect(() => {
@@ -296,18 +321,21 @@ function AppInner() {
     ).catch(() => undefined);
   }, []);
 
+  // Live sysfs snapshot merged over state.json (fresh ts => live ticker).
+  const view = {...state, ...(liveSnap ?? {})} as VoltrixState;
+
   // --- header subtitle -----------------------------------------------------
   const subtitle = useMemo(() => {
-    if (!state?.ts) {
+    if (!view.ts) {
       return stateOffline ? 'Waiting for state — tap Apply now' : 'Reading state…';
     }
-    const ago = Math.max(0, Math.floor(Date.now() / 1000) - state.ts);
+    const ago = Math.max(0, Math.floor(Date.now() / 1000) - view.ts);
     const m = Math.floor(ago / 60);
     return m > 0 ? `Updated ${m}m ago` : `Updated ${ago}s ago`;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state, stateOffline, toast, busy, tab]);
+  }, [view, state, stateOffline, toast, busy, tab]);
 
-  const isCharging = (state?.status ?? '').toLowerCase() === 'charging';
+  const isCharging = (view.status ?? '').toLowerCase() === 'charging';
   const live = rootState === 'ok' && !stateOffline && state != null;
 
   let screen: React.ReactNode;
@@ -336,7 +364,7 @@ function AppInner() {
     default:
       screen = (
         <MonitorScreen
-          state={state}
+          state={view}
           profile={profile}
           busy={busy}
           onSelectProfile={selectProfile}

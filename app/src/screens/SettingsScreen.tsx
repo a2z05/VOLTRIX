@@ -34,6 +34,10 @@ function SliderRow({
   );
 }
 
+/** Minutes-after-midnight -> "07:00" (night charge deadline picker). */
+const fmtTime = (mins: number) =>
+  `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
+
 const STYLE_HINTS: Record<NotifStyle, string> = {
   ISLAND: 'Centered capsule — lives until you swipe it away, accent rim when 67W runs',
   CARD: 'The original two-line card with title, state and switch',
@@ -165,6 +169,48 @@ export function SettingsScreen({
       </Animated.View>
 
       <Animated.View entering={bentoIn(3)}>
+        <SectionTitle hint="Land on target by morning">Night charge</SectionTitle>
+        <Card>
+          <Row
+            title="Night charge"
+            subtitle="Slow cruise overnight — land on target instead of finishing early"
+            right={
+              <Toggle
+                value={settings.nightEnabled}
+                onValueChange={v => onChange({nightEnabled: v})}
+                disabled={busy}
+                accessibilityLabel="Night charge"
+              />
+            }
+          />
+          <SliderRow>
+            <Slider
+              label="Land on"
+              value={settings.nightTarget}
+              min={50}
+              max={100}
+              step={5}
+              format={v => `${v}%`}
+              disabled={!settings.nightEnabled || busy}
+              onChange={v => onChange({nightTarget: v})}
+            />
+          </SliderRow>
+          <SliderRow last>
+            <Slider
+              label={`Reach it by ${fmtTime(settings.nightBy)}`}
+              value={settings.nightBy}
+              min={0}
+              max={1435}
+              step={5}
+              format={fmtTime}
+              disabled={!settings.nightEnabled || busy}
+              onChange={v => onChange({nightBy: v})}
+            />
+          </SliderRow>
+        </Card>
+      </Animated.View>
+
+      <Animated.View entering={bentoIn(4)}>
         <SectionTitle hint="Charging card style">Notification</SectionTitle>
         <Card>
           <View style={styles.styleRow}>
@@ -190,7 +236,7 @@ export function SettingsScreen({
         </Card>
       </Animated.View>
 
-      <Animated.View entering={bentoIn(4)} style={styles.actions}>
+      <Animated.View entering={bentoIn(5)} style={styles.actions}>
         <Button label="Apply now" onPress={onApply} busy={busy} />
         <Button
           label="Save settings"

@@ -17,6 +17,10 @@ CFGDIR=/data/adb/voltrix
 CONFIG=$CFGDIR/config.sh
 STATE=$CFGDIR/state.json
 LOG=$CFGDIR/daemon.log
+# Rotate once past 256KB — periodic state refreshes add lines every cycle.
+if [ -f "$LOG" ] && [ "$(stat -c %s "$LOG" 2>/dev/null || echo 0)" -gt 262144 ] 2>/dev/null; then
+    mv "$LOG" "$LOG.1" 2>/dev/null
+fi
 BACKUP_DIR=$CFGDIR/backup
 
 BATT=/sys/class/power_supply/battery
@@ -101,6 +105,10 @@ load_cfg() {
     THERMAL_COOL_C=40
     ALWAYS_FAST=false
     CHARGE_LIMIT=0
+    # Night charge: slow-cruise toward NIGHT_TARGET so it is reached by NIGHT_BY.
+    NIGHT_ENABLED=false
+    NIGHT_TARGET=80
+    NIGHT_BY=0700
     [ -f "$CONFIG" ] && . "$CONFIG"
 }
 
@@ -297,6 +305,42 @@ apply_settings() {
         battery_saver) level=$BATTERY_SAVER_LEVEL;  ma=$BATTERY_SAVER_MA ;;
         balanced|*)    level=$BALANCED_LEVEL;       ma=$BALANCED_MA ;;
     esac
+
+    # --- Night charge: land on NIGHT_TARGET by NIGHT_BY -----------------------
+    # Plenty of time left  -> battery-saver pace (slow, cool, no early finish
+    #                        beyond the target; CHARGE_LIMIT suspends at it).
+    # Final hour          -> release to the selected profile so the target is
+    #                        actually reached by the alarm.
+    # Already there       -> hold at the target (suspend), normal after BY.
+    if [ "$NIGHT_ENABLED" = "true" ] && [ "$NIGHT_TARGET" -gt 0 ] 2>/dev/null; then
+        local night_cap now_hhmm by_hhmm mins_left night_phase
+        night_cap=$(get_cap)
+        now_hhmm=$(date +%H%M)
+        by_hhmm=$(echo "$NIGHT_BY" | tr -cd '0-9')
+        case "${#by_hhmm}" in
+            4) ;;
+            3) by_hhmm="0$by_hhmm" ;;
+            2) by_hhmm="${by_hhmm}00" ;;
+            *) by_hhmm=0700 ;;
+        esac
+        mins_left=$(( (10#$by_hhmm - 10#$now_hhmm + 1440) % 1440 ))
+        night_phase="hold"
+        if [ "$night_cap" -lt "$NIGHT_TARGET" ] 2>/dev/null; then
+            if [ "$mins_left" -gt 60 ] 2>/dev/null; then
+                night_phase="slow"
+                level=$BATTERY_SAVER_LEVEL
+                ma=$BATTERY_SAVER_MA
+            elif [ "$mins_left" -gt 0 ] 2>/dev/null; then
+                night_phase="final"
+            else
+                night_phase="past"
+            fi
+            CHARGE_LIMIT=$NIGHT_TARGET
+        else
+            CHARGE_LIMIT=$NIGHT_TARGET
+        fi
+        log "NIGHT: phase=$night_phase target=${NIGHT_TARGET}% by=$NIGHT_BY now=$now_hhmm left=${mins_left}m cap=$night_cap"
+    fi
 
     if [ "$AVAIL_LEVEL" = "1" ]; then
         local resolved_level calib_result

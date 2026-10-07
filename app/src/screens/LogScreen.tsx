@@ -17,20 +17,30 @@ export function LogScreen() {
   const [copied, setCopied] = useState(false);
   const copyTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // quiet=true keeps the button idle — used by the live auto-refresh so the
+  // log keeps itself current without anyone tapping Refresh.
+  const load = useCallback(async (quiet?: boolean) => {
+    if (!quiet) {
+      setLoading(true);
+    }
     try {
       setText(await readLog());
     } catch (e) {
       setText(`Error: ${errMsg(e)}`);
     } finally {
-      setLoading(false);
+      if (!quiet) {
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     load();
+    const id = setInterval(() => {
+      load(true);
+    }, 5000);
     return () => {
+      clearInterval(id);
       if (copyTimer.current) {
         clearTimeout(copyTimer.current);
       }
@@ -53,7 +63,7 @@ export function LogScreen() {
   return (
     <View style={styles.wrap}>
       <Animated.View entering={bentoIn(0)} style={styles.headerRow}>
-        <SectionTitle hint="Last 100 lines">Daemon log</SectionTitle>
+        <SectionTitle hint="Live — last 100 lines">Daemon log</SectionTitle>
         <PressableScale
           accessibilityRole="button"
           onPress={copy}
