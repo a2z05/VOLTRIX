@@ -249,6 +249,14 @@ apply_thermal_gate() {
     [ "$AVAIL_THERMAL" != "1" ] && return
     [ "$DISABLE_THERMAL" != "true" ] && { safe_write "$QB/thermal_remove" "0"; write_gate_state 0; return; }
 
+    # 67W opt-in: the gate only opens with this session's explicit consent (the
+    # card toggle) or when ALWAYS_FAST is switched on in the app settings.
+    if [ ! -f "$CFGDIR/fast_consent" ] && [ "$ALWAYS_FAST" != "true" ]; then
+        safe_write "$QB/thermal_remove" "0"
+        write_gate_state 0
+        return
+    fi
+
     local gate_state open_threshold
     gate_state=$(read_gate_state)
     open_threshold=$THERMAL_COOL_C

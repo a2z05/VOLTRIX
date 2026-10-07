@@ -11,6 +11,8 @@ MODDIR=${0%/*}
 CFGDIR=/data/adb/voltrix
 LOG=$CFGDIR/daemon.log
 mkdir -p "$CFGDIR" "$CFGDIR/backup"
+# Fresh boot = fresh 67W session: forget last session's consent, ask again.
+rm -f "$CFGDIR/fast_consent"
 
 while [ "$(getprop sys.boot_completed)" != "1" ]; do
     sleep 3
@@ -21,6 +23,8 @@ sleep 10
 # clear app-ops occasionally — every boot re-asserts it, and charger_watch
 # re-asserts it again at the exact trigger moment.
 /system/bin/appops set com.vnerxy.voltrix SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1 || true
+# Notification permission for the fallback card; harmless on pre-Android 13.
+pm grant com.vnerxy.voltrix android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
 
 STATUS=$(cat /sys/class/power_supply/battery/status 2>/dev/null)
 case "$STATUS" in

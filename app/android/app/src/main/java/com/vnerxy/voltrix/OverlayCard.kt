@@ -92,13 +92,26 @@ object OverlayCard {
 
   private fun showNow(ctx: Context, state: NotificationHelper.State): Boolean {
     try {
-      if (card == null) addCard(ctx)
+      val fresh = card == null
+      // First show: addCard() starts the entrance animation — don't snap it away.
+      if (fresh) addCard(ctx)
       applyState(state)
       registerBattery(ctx)
       val v = card ?: return false
-      v.animate().setListener(null).cancel()
-      v.alpha = 1f
-      v.translationY = 0f
+      if (!fresh) {
+        // Re-show: cancel any pending hide, then pulse in so a state change
+        // (question -> active) reads as reactive instead of a hard cut.
+        v.animate().setListener(null).cancel()
+        val d = ctx.resources.displayMetrics.density
+        v.alpha = 0.35f
+        v.translationY = -8f * d
+        v.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(200)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .start()
+      }
       main.removeCallbacks(autoHide)
       main.postDelayed(autoHide, AUTO_HIDE_MS)
       return true

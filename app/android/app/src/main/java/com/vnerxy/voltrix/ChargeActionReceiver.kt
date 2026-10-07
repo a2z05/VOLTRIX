@@ -48,7 +48,8 @@ class ChargeActionReceiver : BroadcastReceiver() {
                     "-c",
                     "[ -w /sys/class/qcom-battery/thermal_remove ] && " +
                         "echo 0 > /sys/class/qcom-battery/thermal_remove; " +
-                        "echo 0 > /data/adb/voltrix/thermal_gate_state")
+                        "echo 0 > /data/adb/voltrix/thermal_gate_state; " +
+                        "rm -f /data/adb/voltrix/fast_consent")
                 .redirectErrorStream(true)
                 .start()
         process.inputStream.bufferedReader().use { it.readText() }
@@ -77,7 +78,12 @@ class ChargeActionReceiver : BroadcastReceiver() {
             ProcessBuilder(
                     "su",
                     "-c",
-                    "sh /data/adb/modules/voltrix/script/charge.sh >/dev/null 2>&1")
+                    // Consent first — the gate refuses to open without it — then
+                    // report whether the gate actually ended up open (temp may
+                    // still be over the safe threshold).
+                    "touch /data/adb/voltrix/fast_consent && " +
+                        "sh /data/adb/modules/voltrix/script/charge.sh >/dev/null 2>&1; " +
+                        "[ \"\$(cat /data/adb/voltrix/thermal_gate_state 2>/dev/null)\" = \"1\" ]")
                 .redirectErrorStream(true)
                 .start()
         // Drain output so a chatty script can never block on a full pipe buffer.

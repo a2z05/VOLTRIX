@@ -46,8 +46,8 @@ ALWAYS_FAST=false
 CHARGE_LIMIT=0
 
 AUTO_TRIGGER_ENABLED=true
-AUTO_TRIGGER_POLL_SECONDS=60
-AUTO_TRIGGER_IDLE_POLL_SECONDS=300
+AUTO_TRIGGER_POLL_SECONDS=15
+AUTO_TRIGGER_IDLE_POLL_SECONDS=5
 TEMP_CHANGE_THRESHOLD_TENTHS=5
 CFG
 fi
@@ -63,6 +63,7 @@ ui_print "► Installing companion app..."
 if command -v pm >/dev/null 2>&1 && [ "$(getprop sys.boot_completed)" = "1" ]; then
     if pm install -r "$MODPATH/app/VOLTRIX.apk" >/dev/null 2>&1; then
         ui_print "  · VOLTRIX app installed"
+        pm grant com.vnerxy.voltrix android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
     else
         ui_print "  · auto-install failed — install manually:"
         ui_print "    $MODPATH/app/VOLTRIX.apk"
@@ -76,6 +77,13 @@ fi
 # SYSTEM_ALERT_WINDOW — no manual "display over other apps" toggle. If the
 # package is not installed yet, service.sh re-tries every boot.
 /system/bin/appops set com.vnerxy.voltrix SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1 || true
+
+# v1.0.12: faster trigger intervals — migrate configs written by older installs
+# (config lives in /data/adb/voltrix and survives module updates).
+if [ -f /data/adb/voltrix/config.sh ]; then
+    sed -i 's/AUTO_TRIGGER_POLL_SECONDS=[0-9]*/AUTO_TRIGGER_POLL_SECONDS=15/' /data/adb/voltrix/config.sh
+    sed -i 's/AUTO_TRIGGER_IDLE_POLL_SECONDS=[0-9]*/AUTO_TRIGGER_IDLE_POLL_SECONDS=5/' /data/adb/voltrix/config.sh
+fi
 
 ui_print ""
 ui_print "✓ Done — reboot required"

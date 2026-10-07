@@ -26,6 +26,8 @@ notify_card() {
     # Re-assert the overlay appop right before the card draws — root grant
     # replaces the manual "display over other apps" toggle entirely.
     /system/bin/appops set "$PKG" SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1 || true
+    # A force-stopped app silently drops broadcasts — clear stopped state first.
+    /system/bin/cmd package set-stopped-state "$PKG" false >/dev/null 2>&1 || true
     if [ "$1" = "cancel" ]; then
         /system/bin/am broadcast -n "$PKG/.ShowCardReceiver" -a "$PKG.SHOW_CARD" --ez cancel true >/dev/null 2>&1
     else
@@ -45,9 +47,9 @@ get_cap() {
     [ -r "$BATT/capacity" ] && cat "$BATT/capacity" 2>/dev/null || echo 0
 }
 
-CHARGING_POLL_SECONDS=60
+CHARGING_POLL_SECONDS=15
 TEMP_CHANGE_THRESHOLD_TENTHS=5
-IDLE_POLL_SECONDS=300
+IDLE_POLL_SECONDS=5
 AUTO_TRIGGER_ENABLED=true
 [ -f "$CONFIG" ] && . "$CONFIG"
 [ -n "$AUTO_TRIGGER_POLL_SECONDS" ] && CHARGING_POLL_SECONDS=$AUTO_TRIGGER_POLL_SECONDS
@@ -76,8 +78,8 @@ while [ "$checks" -lt "$MAX_CHECKS" ]; do
     fi
 
     AUTO_TRIGGER_ENABLED=true
-    CHARGING_POLL_SECONDS=60
-    IDLE_POLL_SECONDS=300
+    CHARGING_POLL_SECONDS=15
+    IDLE_POLL_SECONDS=5
     [ -f "$CONFIG" ] && . "$CONFIG"
     [ -n "$AUTO_TRIGGER_POLL_SECONDS" ] && CHARGING_POLL_SECONDS=$AUTO_TRIGGER_POLL_SECONDS
     [ -n "$AUTO_TRIGGER_IDLE_POLL_SECONDS" ] && IDLE_POLL_SECONDS=$AUTO_TRIGGER_IDLE_POLL_SECONDS
@@ -137,15 +139,18 @@ while [ "$checks" -lt "$MAX_CHECKS" ]; do
         *)
             if [ "$last_status" = "Charging" ] || [ "$last_status" = "Full" ]; then
                 log "Charger disconnected — restoring thermal protection"
+                rm -f /data/adb/voltrix/fast_consent
                 sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
                 notify_card cancel
             fi
             ;;
     esac
 
-    # Refresh state.json each cycle — the app polls it for live numbers
-    # (edge applies already rewrite it; this keeps idle + steady phases fresh).
-    sh "$APPLY_SCRIPT" --state-only >> "$LOG" 2>&1
+    # Refresh state.json — every charging cycle, idle only every 12th check
+    # (~60s at the 5s idle poll) so the faster poll never hammers charge.sh.
+    if [ "$current_status" = "Charging" ] || [ "$current_status" = "Full" ] || [ $((checks % 12)) -eq 0 ]; then
+        sh "$APPLY_SCRIPT" --state-only >> "$LOG" 2>&1
+    fi
 
     last_status="$current_status"
     checks=$((checks + 1))
