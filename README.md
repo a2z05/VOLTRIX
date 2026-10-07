@@ -30,6 +30,9 @@ VOLTRIX is a Magisk / KernelSU module plus a companion Android app. It takes ove
 - **Adaptive charger-connect watcher** — notices plug-in events and re-applies the active profile.
 - **Everything from the app** — profile, thermal toggle and temperature range, performance level 0–16, performance current, always-fast, charge limit and a log viewer.
 - **Degrades gracefully** — devices without the `qcom-battery` nodes still install and run; only the missing knobs are skipped.
+- **Night Charge** — pick a target percentage and an arrival time; VOLTRIX slow-charges through the night and switches to full speed for the last hour, so you wake up at 100 % exactly on time.
+- **Floating overlay charging card** — the moment the charger connects, a live card (battery %, temperature, 67 W state) appears above every app. The module root-grants the overlay access itself — no "display over other apps" hunting, no DND exceptions.
+- **Four notification styles + first-run wizard** — Island, card, slim or classic heads-up as a fallback, and a wizard that walks you through the root grant on first launch.
 
 ## 67W unlock flow
 

@@ -3,7 +3,7 @@ SKIPUNZIP=0
 
 ui_print ""
 ui_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-ui_print "  ⚡ VOLTRIX  v1.0.10 ⚡"
+ui_print "  ⚡ VOLTRIX  v1.0.11 ⚡"
 ui_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 ui_print "  67W full-charge unlock"
 ui_print "  Companion app auto-install"

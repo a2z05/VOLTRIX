@@ -1,94 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400" role="img" aria-label="VOLTRIX — 67W full-charge unlock, root charging control">
-  <title>VOLTRIX — 67W full-charge unlock · root charging control</title>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="400" viewBox="0 0 1200 400">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#0b0c14"/>
-      <stop offset="55%" stop-color="#0d1020"/>
-      <stop offset="100%" stop-color="#0b0c14"/>
+      <stop offset="0" stop-color="#07080E"/>
+      <stop offset="0.55" stop-color="#0A0D18"/>
+      <stop offset="1" stop-color="#05060A"/>
     </linearGradient>
-    <radialGradient id="glowBlue" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#5e7cff" stop-opacity="0.42"/>
-      <stop offset="100%" stop-color="#5e7cff" stop-opacity="0"/>
-    </radialGradient>
-    <radialGradient id="glowGold" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#ffd23f" stop-opacity="0.30"/>
-      <stop offset="100%" stop-color="#ffd23f" stop-opacity="0"/>
-    </radialGradient>
     <linearGradient id="bolt" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffe27a"/>
-      <stop offset="100%" stop-color="#ffd23f"/>
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.55" stop-color="#E4EEFF"/>
+      <stop offset="1" stop-color="#7FA6FF"/>
     </linearGradient>
-    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#5e7cff"/>
-      <stop offset="70%" stop-color="#5e7cff" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#5e7cff" stop-opacity="0"/>
+    <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#9FD8FF"/>
+      <stop offset="1" stop-color="#3E7BFF"/>
     </linearGradient>
-    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="9"/>
-    </filter>
-    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-      <path d="M40 0H0V40" fill="none" stroke="#5e7cff" stroke-opacity="0.07" stroke-width="1"/>
+    <radialGradient id="halo" cx="0.24" cy="0.4" r="0.8">
+      <stop offset="0" stop-color="#2E5BFF" stop-opacity="0.30"/>
+      <stop offset="0.5" stop-color="#1B3B8F" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0v48" fill="none" stroke="#7F86FF" stroke-opacity="0.10" stroke-width="1"/>
     </pattern>
+    <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="10" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
-  <!-- background -->
-  <rect width="1200" height="400" fill="url(#bg)"/>
-  <rect width="1200" height="400" fill="url(#grid)"/>
-  <ellipse cx="270" cy="200" rx="330" ry="250" fill="url(#glowBlue)"/>
-  <ellipse cx="980" cy="120" rx="300" ry="220" fill="url(#glowGold)"/>
+  <rect width="1200" height="400" rx="24" fill="url(#bg)"/>
+  <rect width="1200" height="400" rx="24" fill="url(#halo)"/>
+  <rect x="8" y="8" width="1184" height="384" rx="18" fill="none" stroke="#FFC53D" stroke-opacity="0.65"/>
+  <rect x="14" y="14" width="1172" height="372" rx="14" fill="url(#grid)"/>
 
-  <!-- diagonal energy streaks -->
-  <g stroke="#5e7cff" stroke-opacity="0.16" stroke-width="2">
-    <line x1="820" y1="400" x2="1060" y2="120"/>
-    <line x1="880" y1="400" x2="1120" y2="120"/>
-    <line x1="940" y1="400" x2="1180" y2="120"/>
-  </g>
-  <g stroke="#ffd23f" stroke-opacity="0.20" stroke-width="2">
-    <line x1="1000" y1="400" x2="1200" y2="170"/>
-    <line x1="1060" y1="400" x2="1200" y2="250"/>
+  <!-- mark: bolt inside a broken ring, gaps top & bottom (same DNA as the app icon) -->
+  <g transform="translate(340 200)" filter="url(#glow)">
+    <circle r="112" fill="none" stroke="url(#ring)" stroke-width="13" stroke-linecap="round"
+            stroke-dasharray="293 58 293 58" transform="rotate(102)"/>
+    <path d="M18 -96 L-38 6 L8 6 L-24 96 L40 -12 L-6 -12 Z" fill="url(#bolt)"/>
   </g>
 
-  <!-- top and bottom hairlines -->
-  <rect x="0" y="0" width="1200" height="4" fill="#5e7cff" opacity="0.55"/>
-  <rect x="0" y="396" width="1200" height="4" fill="#ffd23f" opacity="0.55"/>
-
-  <!-- lightning badge -->
-  <g>
-    <rect x="150" y="110" width="180" height="180" rx="38" fill="#12142a" stroke="#5e7cff" stroke-opacity="0.75" stroke-width="3"/>
-    <rect x="164" y="124" width="152" height="152" rx="28" fill="none" stroke="#5e7cff" stroke-opacity="0.20" stroke-width="1.5"/>
-    <path d="M252 145 L212 205 L236 205 L226 255 L268 192 L242 192 Z"
-          fill="url(#bolt)" filter="url(#soft)" opacity="0.85"/>
-    <path d="M252 145 L212 205 L236 205 L226 255 L268 192 L242 192 Z"
-          fill="url(#bolt)" stroke="#0b0c14" stroke-width="2" stroke-linejoin="round"/>
-  </g>
-
-  <!-- eyebrow -->
-  <text x="382" y="152" font-family="Arial, Helvetica, sans-serif" font-size="18"
-        font-weight="700" letter-spacing="6" fill="#ffd23f">CHARGE MODULE + COMPANION APP</text>
-
-  <!-- wordmark -->
-  <text x="378" y="248" font-family="Arial, Helvetica, sans-serif" font-size="94"
-        font-weight="800" letter-spacing="6" fill="#ffffff">VOLTRIX</text>
-
-  <!-- accent rule -->
-  <rect x="382" y="268" width="520" height="4" rx="2" fill="url(#rule)"/>
-
-  <!-- tagline -->
-  <text x="382" y="308" font-family="Arial, Helvetica, sans-serif" font-size="25"
-        font-weight="600" letter-spacing="1.5" fill="#9aa4c8">67W full-charge unlock · root charging control</text>
-
-  <!-- chips -->
-  <g font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing="1.2">
-    <rect x="382" y="330" width="110" height="34" rx="17" fill="#5e7cff" fill-opacity="0.16" stroke="#5e7cff" stroke-opacity="0.6"/>
-    <text x="437" y="352" text-anchor="middle" fill="#a9b6ff">67W</text>
-
-    <rect x="508" y="330" width="236" height="34" rx="17" fill="#5e7cff" fill-opacity="0.16" stroke="#5e7cff" stroke-opacity="0.6"/>
-    <text x="626" y="352" text-anchor="middle" fill="#a9b6ff">KERNELSU / MAGISK</text>
-
-    <rect x="760" y="330" width="152" height="34" rx="17" fill="#ffd23f" fill-opacity="0.14" stroke="#ffd23f" stroke-opacity="0.6"/>
-    <text x="836" y="352" text-anchor="middle" fill="#ffd23f">ANDROID 7+</text>
-
-    <rect x="928" y="330" width="84" height="34" rx="17" fill="#ffd23f" fill-opacity="0.14" stroke="#ffd23f" stroke-opacity="0.6"/>
-    <text x="970" y="352" text-anchor="middle" fill="#ffd23f">MIT</text>
-  </g>
+  <text x="620" y="188" font-family="'Segoe UI','Noto Sans',sans-serif" font-size="96" font-weight="800"
+        letter-spacing="6" fill="#FFC53D" text-shadow="0 0 24px rgba(255,197,61,0.45)">67W</text>
+  <rect x="622" y="212" width="330" height="3" rx="1.5" fill="#FFC53D" opacity="0.9"/>
+  <text x="620" y="262" font-family="'Segoe UI','Noto Sans',sans-serif" font-size="34" font-weight="700"
+        letter-spacing="10" fill="#DDE6FF">FULL-CHARGE UNLOCK</text>
+  <text x="620" y="306" font-family="'Segoe UI','Noto Sans',sans-serif" font-size="22" font-weight="500"
+        fill="#9AA7FF">root charging control</text>
 </svg>

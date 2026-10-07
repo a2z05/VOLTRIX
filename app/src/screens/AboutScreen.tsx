@@ -3,10 +3,10 @@
  * presented as a centered feature card with the bolt mark.
  */
 import React from 'react';
-import {Linking, ScrollView, StyleSheet, Text, View, ViewStyle} from 'react-native';
+import {Image, Linking, ScrollView, StyleSheet, Text, View} from 'react-native';
 import Animated from 'react-native-reanimated';
 import {Card, PressableScale, SectionTitle} from '../components/ui';
-import {BoltIcon} from '../components/icons';
+import logo from '../assets/logo.png';
 import {bentoIn} from '../anim';
 import {colors, radii, space} from '../theme';
 
@@ -27,12 +27,10 @@ export function AboutScreen() {
         <SectionTitle>About</SectionTitle>
         <Card style={styles.card}>
           <View style={styles.orbit}>
-            <View style={styles.icon}>
-              <BoltIcon color="#ffffff" size={24} />
-            </View>
+            <Image source={logo} style={styles.icon} accessibilityLabel="VOLTRIX logo" />
           </View>
           <Text style={styles.title}>VOLTRIX</Text>
-          <Text style={styles.version}>Version 1.0.10</Text>
+          <Text style={styles.version}>Version 1.0.11</Text>
           <Text style={styles.credit}>Crafted by a2z (Vnerxy)</Text>
 
           <PressableScale
@@ -83,16 +81,11 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 18,
-    backgroundColor: colors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...({
-      shadowColor: '#7170ff',
-      shadowOpacity: 0.55,
-      shadowRadius: 18,
-      shadowOffset: {width: 0, height: 6},
-      elevation: 6,
-    } as ViewStyle),
+    shadowColor: '#7170ff',
+    shadowOpacity: 0.55,
+    shadowRadius: 18,
+    shadowOffset: {width: 0, height: 6},
+    elevation: 6,
   },
   title: {
     fontSize: 25,
