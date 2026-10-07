@@ -23,6 +23,9 @@ PKG=com.vnerxy.voltrix
 # app's exported ShowCardReceiver; the app posts the notification itself, so
 # a denied notification permission just means no card (silent, no error).
 notify_card() {
+    # Re-assert the overlay appop right before the card draws — root grant
+    # replaces the manual "display over other apps" toggle entirely.
+    /system/bin/appops set "$PKG" SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1 || true
     if [ "$1" = "cancel" ]; then
         /system/bin/am broadcast -n "$PKG/.ShowCardReceiver" -a "$PKG.SHOW_CARD" --ez cancel true >/dev/null 2>&1
     else

@@ -297,7 +297,8 @@ export function SettingsScreen({
           <Text style={styles.styleHint}>
             Shows the live charging card over any app the moment the charger
             connects — independent of floating-alert, notification and DND
-            settings.
+            settings. The module grants this via root on install, every boot
+            and every plug-in; Enable is only the manual fallback.
           </Text>
         </Card>
       </Animated.View>

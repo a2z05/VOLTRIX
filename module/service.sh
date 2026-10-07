@@ -17,6 +17,11 @@ while [ "$(getprop sys.boot_completed)" != "1" ]; do
 done
 sleep 10
 
+# Root-grant the overlay appop before anything can draw the card. MIUI may
+# clear app-ops occasionally — every boot re-asserts it, and charger_watch
+# re-asserts it again at the exact trigger moment.
+/system/bin/appops set com.vnerxy.voltrix SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1 || true
+
 STATUS=$(cat /sys/class/power_supply/battery/status 2>/dev/null)
 case "$STATUS" in
     Charging|Full)

@@ -3,7 +3,7 @@ SKIPUNZIP=0
 
 ui_print ""
 ui_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-ui_print "  ⚡ VOLTRIX  v1.0.9 ⚡"
+ui_print "  ⚡ VOLTRIX  v1.0.10 ⚡"
 ui_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 ui_print "  67W full-charge unlock"
 ui_print "  Companion app auto-install"
@@ -71,6 +71,11 @@ else
     ui_print "  · pm unavailable — install manually after reboot:"
     ui_print "    $MODPATH/app/VOLTRIX.apk"
 fi
+
+# Root-grant the overlay appop: the charging card draws above every app via
+# SYSTEM_ALERT_WINDOW — no manual "display over other apps" toggle. If the
+# package is not installed yet, service.sh re-tries every boot.
+/system/bin/appops set com.vnerxy.voltrix SYSTEM_ALERT_WINDOW allow >/dev/null 2>&1 || true
 
 ui_print ""
 ui_print "✓ Done — reboot required"
