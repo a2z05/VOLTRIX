@@ -11,7 +11,6 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.net.Uri
-import android.provider.RingtoneManager
 import android.os.BatteryManager
 import android.os.Build
 import android.view.View
@@ -54,6 +53,14 @@ object NotificationHelper {
   private const val CHANNEL_ID = "voltrix_fast"
   private const val NOTIF_ID = 6701
   private const val PREFS = "voltrix"
+
+  /**
+   * Our own channel revision marker: shouldBypassDnd() — the getter that would
+   * tell us "this channel predates the DND-bypass upgrade" — is missing from
+   * the compile SDK, so track the revision ourselves instead.
+   */
+  private const val CH_REV_KEY = "notif_channel_rev"
+  private const val CH_REV = 1
 
   /** SharedPreferences key written by the Settings screen (JS) and read here. */
   const val PREF_STYLE = "NOTIF_STYLE"
@@ -248,7 +255,8 @@ object NotificationHelper {
     // changed settings on an existing channel. A channel installed before the
     // DND-bypass/sound upgrade must be deleted and rebuilt, otherwise DND
     // swallows the heads-up forever.
-    if (existing != null && (!existing.shouldBypassDnd() || existing.sound == null)) {
+    val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    if (existing != null && prefs.getInt(CH_REV_KEY, 0) < CH_REV) {
       nm.deleteNotificationChannel(CHANNEL_ID)
     }
     if (nm.getNotificationChannel(CHANNEL_ID) == null) {
@@ -259,7 +267,7 @@ object NotificationHelper {
       // with Do Not Disturb on (night-charge is exactly when DND is active).
       ch.setBypassDnd(true)
       ch.setSound(
-          RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION),
+          Uri.parse("content://settings/system/notification_sound"),
           AudioAttributes.Builder()
               .setUsage(AudioAttributes.USAGE_NOTIFICATION)
               .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -269,6 +277,7 @@ object NotificationHelper {
       ch.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC)
       ch.setShowBadge(false)
       nm.createNotificationChannel(ch)
+      prefs.edit().putInt(CH_REV_KEY, CH_REV).apply()
     }
   }
 }
