@@ -107,11 +107,18 @@ jobs:
         run: |
           VERSION=$(grep '^version=' module/module.prop | cut -d= -f2)
           TAG="v${VERSION#v}"
-          APK=$(ls app/android/app/build/outputs/apk/release/*.apk | head -1)
-          NOTES="VOLTRIX ${VERSION} — Magisk/KernelSU module zip + companion APK, built by CI."
+          NOTES="VOLTRIX ${VERSION} — Magisk/KernelSU module zip, built by CI."
+          # The release carries ONLY the module zip — the APK rides inside it.
+          # (The standalone APK stays available as a workflow artifact.)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "VOLTRIX-${VERSION}.zip" "$APK" --clobber
+            gh release upload "$TAG" "VOLTRIX-${VERSION}.zip" --clobber
           else
-            gh release create "$TAG" "VOLTRIX-${VERSION}.zip" "$APK" \
+            gh release create "$TAG" "VOLTRIX-${VERSION}.zip" \
               --title "VOLTRIX ${VERSION}" --notes "$NOTES"
           fi
+          # Purge stray assets (the APK older workflows uploaded).
+          for A in $(gh release view "$TAG" --json assets -q '.assets[].name'); do
+            if [ "$A" != "VOLTRIX-${VERSION}.zip" ]; then
+              gh release delete-asset "$TAG" "$A" -y
+            fi
+          done
