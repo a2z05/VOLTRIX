@@ -3,7 +3,7 @@ SKIPUNZIP=0
 
 ui_print ""
 ui_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-ui_print "  ⚡ VOLTRIX  v1.0 ⚡"
+ui_print "  ⚡ VOLTRIX  v1.0.1 ⚡"
 ui_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 ui_print "  67W full-charge unlock"
 ui_print "  Companion app auto-install"
@@ -11,7 +11,6 @@ ui_print "  Thermal gate control"
 ui_print "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 ui_print "► Extracting..."
-unzip -o "$ZIPFILE" 'common/*' -d "$MODPATH" >&2
 unzip -o "$ZIPFILE" 'script/*' -d "$MODPATH" >&2
 unzip -o "$ZIPFILE" 'app/*'   -d "$MODPATH" >&2
 
@@ -24,11 +23,9 @@ if [ -d "$OLDDIR" ] && [ ! -f "$CFGDIR/config.sh" ] && [ -f "$OLDDIR/config.sh" 
     [ -f "$OLDDIR/level_calibration" ] && cp "$OLDDIR/level_calibration" "$CFGDIR/level_calibration" 2>/dev/null
     ui_print "  · old config migrated to $CFGDIR"
 fi
-# Retire the old HyperCharge module (id=hypercharge) on next reboot if present.
-if [ -d /data/adb/modules/hypercharge ]; then
-    touch /data/adb/modules/hypercharge/remove 2>/dev/null
-    ui_print "  · old HyperCharge module marked for removal"
-fi
+# NOTE: never auto-remove the old HyperCharge module here — uninstalling
+# another module from an installer is the user's call (its on-device
+# content may differ from any zip we hold).
 
 if [ ! -f "$CFGDIR/config.sh" ]; then
 cat > "$CFGDIR/config.sh" << 'CFG'
@@ -57,7 +54,7 @@ fi
 
 ui_print "► Permissions..."
 set_perm_recursive "$MODPATH"                  root root 0755 0644
-set_perm "$MODPATH/common/service.sh"          root root 0755
+set_perm "$MODPATH/service.sh"                 root root 0755
 set_perm "$MODPATH/script/charge.sh"           root root 0755
 set_perm "$MODPATH/script/charger_watch.sh"    root root 0755
 chmod 0600 "$CFGDIR/config.sh"
