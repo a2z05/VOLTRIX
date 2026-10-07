@@ -73,7 +73,7 @@ Every key below lives in `/data/adb/vnerxy_charge/config.sh`; the companion app 
 4. Open KernelSU or Magisk once and **grant root to the VOLTRIX app**.
 5. Open the app, pick a profile, and charge.
 
-> CI builds the app APK, injects it into the module zip, and attaches both the zip and the APK to each GitHub Release.
+> CI builds the app APK, injects it into the module zip, and attaches the zip to each GitHub Release.
 
 ## Requirements
 
@@ -86,6 +86,12 @@ Devices missing those nodes install cleanly and degrade gracefully — the affec
 ## Uninstall
 
 Remove the module from KernelSU / Magisk (or drop a `remove` file in the module folder) and reboot. The app can then be uninstalled like any other app. Nothing outside `/data/adb/vnerxy_charge/` is touched.
+
+## Disclaimer
+
+- **Tested on real hardware, every release.** The module is flashed to the author's own daily-driver Xiaomi phone before it is published — boot safety, the charger-connect trigger and the 67 W unlock are verified on-device, not only in CI.
+- VOLTRIX writes kernel charging nodes as root. It changes how your battery charges: use it at your own risk, watch the temperature the first time you try a new profile, and remove the module immediately if anything looks off.
+- Provided **"as is"**, without warranty of any kind — see the [MIT License](LICENSE). Modifying a rooted device can affect your manufacturer warranty; you are responsible for what you flash.
 
 ## License
 
