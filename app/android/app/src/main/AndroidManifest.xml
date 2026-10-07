@@ -42,8 +42,20 @@
         android:name=".ChargeActionReceiver"
         android:exported="false">
         <intent-filter>
-          <action android:name="com.vnerxy.voltrix.APPLY_67W" />
+          <action android:name="com.vnerxy.voltrix.TOGGLE_67W" />
           <action android:name="com.vnerxy.voltrix.DISMISS" />
+        </intent-filter>
+      </receiver>
+
+      <!-- Card entry point for the root watcher (charger connect/disconnect).
+           exported so uid-0 broadcasts reach it; posting a notification is the
+           extent of what a sender can do — TOGGLE (root scripts) stays in the
+           non-exported receiver above, reached only via this app's PendingIntents. -->
+      <receiver
+        android:name=".ShowCardReceiver"
+        android:exported="true">
+        <intent-filter>
+          <action android:name="com.vnerxy.voltrix.SHOW_CARD" />
         </intent-filter>
       </receiver>
     </application>

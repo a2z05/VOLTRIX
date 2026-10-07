@@ -22,7 +22,13 @@ case "$STATUS" in
     Charging|Full)
         echo "[$(date '+%F %T')] === BOOT: charger connected ($STATUS) -> direct apply ===" >> "$LOG"
         sh "$MODDIR/script/charge.sh" >> "$LOG" 2>&1
-        echo "[$(date '+%F %T')] === BOOT: direct apply finished, exit=$? ===" >> "$LOG"
+        APPLY_EXIT=$?
+        echo "[$(date '+%F %T')] === BOOT: direct apply finished, exit=$APPLY_EXIT ===" >> "$LOG"
+        if [ "$(cat /data/adb/voltrix/thermal_gate_state 2>/dev/null)" = "1" ]; then
+            /system/bin/am broadcast -n com.vnerxy.voltrix/.ShowCardReceiver -a com.vnerxy.voltrix.SHOW_CARD --ez fast true >/dev/null 2>&1
+        else
+            /system/bin/am broadcast -n com.vnerxy.voltrix/.ShowCardReceiver -a com.vnerxy.voltrix.SHOW_CARD --ez fast false >/dev/null 2>&1
+        fi
         ;;
     *)
         echo "[$(date '+%F %T')] === BOOT: on battery ('$STATUS') -> skip first apply; watcher will apply on plug-in ===" >> "$LOG"

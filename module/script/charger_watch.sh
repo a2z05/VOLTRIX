@@ -18,6 +18,18 @@ BATT=/sys/class/power_supply/battery
 
 log() { echo "[$(date '+%T')] $*" >> "$LOG"; }
 
+PKG=com.vnerxy.voltrix
+# Surface the VOLTRIX card when the charger state changes. Root reaches the
+# app's exported ShowCardReceiver; the app posts the notification itself, so
+# a denied notification permission just means no card (silent, no error).
+notify_card() {
+    if [ "$1" = "cancel" ]; then
+        /system/bin/am broadcast -n "$PKG/.ShowCardReceiver" -a "$PKG.SHOW_CARD" --ez cancel true >/dev/null 2>&1
+    else
+        /system/bin/am broadcast -n "$PKG/.ShowCardReceiver" -a "$PKG.SHOW_CARD" --ez fast "$1" >/dev/null 2>&1
+    fi
+}
+
 get_status() {
     [ -r "$BATT/status" ] && cat "$BATT/status" 2>/dev/null || echo "Unknown"
 }
@@ -75,6 +87,11 @@ while [ "$checks" -lt "$MAX_CHECKS" ]; do
                 log "Charger connected (was: $last_status) — full apply"
                 sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
                 last_full_apply_ts=$now_ts
+                if [ "$(cat /data/adb/voltrix/thermal_gate_state 2>/dev/null)" = "1" ]; then
+                    notify_card true
+                else
+                    notify_card false
+                fi
             else
                 current_temp_raw=$(get_temp_raw)
                 temp_changed=0
@@ -96,6 +113,7 @@ while [ "$checks" -lt "$MAX_CHECKS" ]; do
             if [ "$last_status" = "Charging" ] || [ "$last_status" = "Full" ]; then
                 log "Charger disconnected — restoring thermal protection"
                 sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
+                notify_card cancel
             fi
             ;;
     esac
