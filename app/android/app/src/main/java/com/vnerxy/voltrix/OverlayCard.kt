@@ -263,7 +263,7 @@ object OverlayCard {
     // The one accent moment: brand bolt in a soft accent-tinted chip.
     val icon = ImageView(ctx)
     icon.setImageResource(R.drawable.voltrix_bolt)
-    icon.scaleType = ImageView.CENTER_INSIDE
+    icon.scaleType = ImageView.ScaleType.CENTER_INSIDE
     icon.imageTintList = ColorStateList.valueOf(C_ACCENT_BRIGHT)
     icon.background =
         GradientDrawable().apply {
