@@ -27,9 +27,17 @@ sleep 10
 pm grant com.vnerxy.voltrix android.permission.POST_NOTIFICATIONS >/dev/null 2>&1 || true
 
 STATUS=$(cat /sys/class/power_supply/battery/status 2>/dev/null)
-case "$STATUS" in
-    Charging|Full)
-        echo "[$(date '+%F %T')] === BOOT: charger connected ($STATUS) -> direct apply ===" >> "$LOG"
+# Decide by the CABLE, not the battery's word: a port the previous session
+# left suspended reads "Not charging" with the charger still in, and that
+# used to skip the very apply that would release it.
+ONLINE=$(cat /sys/class/power_supply/usb/online 2>/dev/null)
+[ -z "$ONLINE" ] && case "$STATUS" in
+    Charging|Full) ONLINE=1 ;;
+    *)             ONLINE=0 ;;
+esac
+case "$ONLINE" in
+    1)
+        echo "[$(date '+%F %T')] === BOOT: charger connected (status=$STATUS) -> direct apply ===" >> "$LOG"
         sh "$MODDIR/script/charge.sh" >> "$LOG" 2>&1
         APPLY_EXIT=$?
         echo "[$(date '+%F %T')] === BOOT: direct apply finished, exit=$APPLY_EXIT ===" >> "$LOG"
@@ -40,7 +48,7 @@ case "$STATUS" in
         fi
         ;;
     *)
-        echo "[$(date '+%F %T')] === BOOT: on battery ('$STATUS') -> skip first apply; watcher will apply on plug-in ===" >> "$LOG"
+        echo "[$(date '+%F %T')] === BOOT: on battery (status=$STATUS) -> skip first apply; watcher will apply on plug-in ===" >> "$LOG"
         ;;
 esac
 

@@ -32,6 +32,7 @@ export interface VoltrixState {
   thermal_hot_c?: number;
   thermal_cool_c?: number;
   thermal_gate_active?: boolean;
+  fast_consent?: boolean;
   charger_type_detected?: string;
   level_calibration?: string;
   avail_total?: number;
@@ -290,9 +291,12 @@ export function settingsFromConfig(cfg: ConfigMap): Settings {
     disableThermal: bool(cfg.DISABLE_THERMAL, DEFAULT_SETTINGS.disableThermal),
     thermalCoolC: num(cfg.THERMAL_COOL_C, DEFAULT_SETTINGS.thermalCoolC, 30, 48),
     thermalHotC: num(cfg.THERMAL_HOT_C, DEFAULT_SETTINGS.thermalHotC, 38, 55),
+    // AND, not OR: the toggle writes all three keys, so it only reads back as
+    // on when all three are actually on. The old OR showed "on" whenever any
+    // one key was set, which is how a switched-off toggle kept looking on.
     throttlesDisabled:
-      bool(cfg.DISABLE_NIGHT_CHARGING, DEFAULT_SETTINGS.throttlesDisabled) ||
-      bool(cfg.DISABLE_SMART_CHG, DEFAULT_SETTINGS.throttlesDisabled) ||
+      bool(cfg.DISABLE_NIGHT_CHARGING, DEFAULT_SETTINGS.throttlesDisabled) &&
+      bool(cfg.DISABLE_SMART_CHG, DEFAULT_SETTINGS.throttlesDisabled) &&
       bool(cfg.DISABLE_RESTRICT, DEFAULT_SETTINGS.throttlesDisabled),
     performanceLevel: num(
       cfg.PERFORMANCE_LEVEL,

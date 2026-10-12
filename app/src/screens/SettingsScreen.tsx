@@ -105,6 +105,10 @@ export function SettingsScreen({
   onApply,
   onSave,
   busy,
+  profile,
+  gateActive,
+  fastConsent,
+  onToggleConsent,
 }: {
   settings: Settings;
   notifStyle: NotifStyle;
@@ -113,7 +117,15 @@ export function SettingsScreen({
   onApply: () => void;
   onSave: () => void;
   busy: boolean;
+  /** The active charging profile; the performance sliders only bind to it. */
+  profile: string;
+  /** Live gate state from state.json — is thermal_remove currently lifted? */
+  gateActive: boolean;
+  /** Whether this charge session has granted 67W consent. */
+  fastConsent: boolean;
+  onToggleConsent: (v: boolean) => void;
 }) {
+  const perfLocked = profile !== 'performance';
   return (
     <ScrollView
       contentContainerStyle={styles.content}
@@ -122,13 +134,35 @@ export function SettingsScreen({
         <SectionTitle hint="Temperature window">Thermal</SectionTitle>
         <Card>
           <Row
-            title="Thermal management enabled"
-            subtitle="Temperature-gated fast charging"
+            title="Temperature-gated fast charge"
+            subtitle={
+              settings.disableThermal
+                ? 'Gate lifts under consent and closes at the hot limit'
+                : 'Off — protection stays locked, nothing is ever lifted'
+            }
             right={
               <Toggle
                 value={settings.disableThermal}
                 onValueChange={v => onChange({disableThermal: v})}
-                accessibilityLabel="Thermal management enabled"
+                accessibilityLabel="Temperature-gated fast charge"
+              />
+            }
+          />
+          <Row
+            title="Allow 67W for this charge"
+            subtitle={
+              fastConsent
+                ? gateActive
+                  ? 'Gate is open right now'
+                  : `Waiting for the battery to fall under ${settings.thermalCoolC}°C`
+                : 'Consent lasts until you unplug'
+            }
+            right={
+              <Toggle
+                value={fastConsent}
+                onValueChange={onToggleConsent}
+                disabled={busy || !settings.disableThermal}
+                accessibilityLabel="Allow 67W for this charge"
               />
             }
           />
@@ -171,22 +205,32 @@ export function SettingsScreen({
           />
           <SliderRow>
             <Slider
-              label="Performance level"
+              label={
+                perfLocked
+                  ? `Performance level · active on Performance profile`
+                  : 'Performance level'
+              }
               value={settings.performanceLevel}
               min={0}
               max={16}
               format={v => `${v}/16`}
+              disabled={perfLocked || busy}
               onChange={v => onChange({performanceLevel: v})}
             />
           </SliderRow>
           <SliderRow last>
             <Slider
-              label="Performance current"
+              label={
+                perfLocked
+                  ? `Performance current · active on Performance profile`
+                  : 'Performance current'
+              }
               value={settings.performanceMa}
               min={1000}
               max={13400}
               step={100}
               format={v => `${v}mA`}
+              disabled={perfLocked || busy}
               onChange={v => onChange({performanceMa: v})}
             />
           </SliderRow>

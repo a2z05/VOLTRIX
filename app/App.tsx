@@ -246,6 +246,32 @@ function AppInner() {
     setSettings(prev => ({...prev, ...patch}));
   }, []);
 
+  // 67W consent is a per-charge-session file the module reads; it used to be
+  // reachable only from the card's button, which meant the thermal settings
+  // could not do anything visible if the card never showed.
+  const toggleConsent = useCallback(
+    async (on: boolean) => {
+      setBusy(true);
+      try {
+        const cmd = on
+          ? 'touch /data/adb/voltrix/fast_consent'
+          : 'rm -f /data/adb/voltrix/fast_consent';
+        const r = await exec(cmd);
+        if (r.code !== 0) {
+          throw new Error(r.stderr || `root command exited ${r.code}`);
+        }
+        await runApplyScript();
+        await refresh();
+        showToast(on ? '✓ 67W allowed for this charge' : '✓ Consent removed');
+      } catch (e) {
+        showToast(`⚠ ${errMsg(e)}`);
+      } finally {
+        setBusy(false);
+      }
+    },
+    [refresh, showToast],
+  );
+
   const selectProfile = useCallback(
     async (p: ProfileKey) => {
       if (busy) {
@@ -352,6 +378,10 @@ function AppInner() {
           }}
           onSave={saveSettings}
           busy={busy}
+          profile={profile}
+          gateActive={state?.thermal_gate_active === true}
+          fastConsent={state?.fast_consent === true}
+          onToggleConsent={toggleConsent}
         />
       );
       break;

@@ -39,6 +39,27 @@ get_status() {
     [ -r "$BATT/status" ] && cat "$BATT/status" 2>/dev/null || echo "Unknown"
 }
 
+# Cable in or out — from the supply's online flag, not battery status. While
+# the module holds input_suspend the battery says "Not charging" with the
+# cable still plugged in, and a status-based watcher reads that as an
+# unplug: it strips fast_consent, cancels the card and re-applies, then the
+# next apply suspends again — a churn that looks like "it does nothing".
+get_online() {
+    local v n
+    for n in /sys/class/power_supply/usb*/online /sys/class/power_supply/DC*/online; do
+        v=$(cat "$n" 2>/dev/null)
+        [ -n "$v" ] && break
+    done
+    if [ -z "$v" ]; then
+        case "$(get_status)" in
+            Charging|Full) echo 1 ;;
+            *) echo 0 ;;
+        esac
+    else
+        echo "$v" | tr -cd '01' | head -c1
+    fi
+}
+
 get_temp_raw() {
     [ -r "$BATT/temp" ] && cat "$BATT/temp" 2>/dev/null || echo ""
 }
@@ -63,6 +84,7 @@ fi
 log "Charger watcher starting (adaptive: ${CHARGING_POLL_SECONDS}s charging / ${IDLE_POLL_SECONDS}s idle)"
 
 last_status=$(get_status)
+last_online=$(get_online)
 last_temp_raw=$(get_temp_raw)
 last_full_apply_ts=0
 night_target_hit=0
@@ -71,7 +93,7 @@ checks=0
 MAX_CHECKS=4000
 
 while [ "$checks" -lt "$MAX_CHECKS" ]; do
-    if [ "$last_status" = "Charging" ] || [ "$last_status" = "Full" ]; then
+    if [ "$last_online" = "1" ]; then
         sleep "$CHARGING_POLL_SECONDS"
     else
         sleep "$IDLE_POLL_SECONDS"
@@ -90,69 +112,72 @@ while [ "$checks" -lt "$MAX_CHECKS" ]; do
     fi
 
     current_status=$(get_status)
+    current_online=$(get_online)
     now_ts=$(date +%s)
 
-    case "$current_status" in
-        Charging|Full)
-            if [ "$last_status" != "Charging" ] && [ "$last_status" != "Full" ]; then
-                log "Charger connected (was: $last_status) — full apply"
+    # Edges follow the CABLE (online), not the battery's word: a port we
+    # suspended ourselves reports "Not charging" with the cable still in, and
+    # treating that as an unplug used to strip fast_consent and re-apply
+    # every single poll.
+    if [ "$current_online" = "1" ]; then
+        if [ "$last_online" != "1" ]; then
+            log "Charger connected (status $last_status) — full apply"
+            sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
+            last_full_apply_ts=$now_ts
+            if [ "$(cat /data/adb/voltrix/thermal_gate_state 2>/dev/null)" = "1" ]; then
+                notify_card true
+            else
+                notify_card false
+            fi
+        else
+            current_temp_raw=$(get_temp_raw)
+            temp_changed=0
+            if [ -n "$current_temp_raw" ] && [ -n "$last_temp_raw" ]; then
+                diff=$((current_temp_raw - last_temp_raw))
+                [ "$diff" -lt 0 ] && diff=$((0 - diff))
+                [ "$diff" -ge "$TEMP_CHANGE_THRESHOLD_TENTHS" ] && temp_changed=1
+            fi
+            time_since_last=$((now_ts - last_full_apply_ts))
+            recheck_after=600
+            if [ "$NIGHT_ENABLED" = "true" ] 2>/dev/null; then
+                # Night schedule active: recheck twice as often so phase
+                # flips (slow -> final hour) land within 5 minutes, and
+                # fire ONE apply the moment the target is reached so the
+                # module suspends there instead of coasting past it.
+                recheck_after=300
+                ncap=$(get_cap)
+                if [ "$ncap" -lt "$NIGHT_TARGET" ] 2>/dev/null; then
+                    night_suspended=0
+                elif [ "$night_suspended" = "0" ]; then
+                    night_target_hit=1
+                fi
+            fi
+            if [ "$temp_changed" = "1" ] || [ "$night_target_hit" = "1" ] || [ "$time_since_last" -ge "$recheck_after" ]; then
+                log "Re-check (temp=$temp_changed hit=${night_target_hit}x, ${time_since_last}s since last) — full apply"
                 sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
                 last_full_apply_ts=$now_ts
-                if [ "$(cat /data/adb/voltrix/thermal_gate_state 2>/dev/null)" = "1" ]; then
-                    notify_card true
-                else
-                    notify_card false
-                fi
-            else
-                current_temp_raw=$(get_temp_raw)
-                temp_changed=0
-                if [ -n "$current_temp_raw" ] && [ -n "$last_temp_raw" ]; then
-                    diff=$((current_temp_raw - last_temp_raw))
-                    [ "$diff" -lt 0 ] && diff=$((0 - diff))
-                    [ "$diff" -ge "$TEMP_CHANGE_THRESHOLD_TENTHS" ] && temp_changed=1
-                fi
-                time_since_last=$((now_ts - last_full_apply_ts))
-                recheck_after=600
-                if [ "$NIGHT_ENABLED" = "true" ] 2>/dev/null; then
-                    # Night schedule active: recheck twice as often so phase
-                    # flips (slow -> final hour) land within 5 minutes, and
-                    # fire ONE apply the moment the target is reached so the
-                    # module suspends there instead of coasting past it.
-                    recheck_after=300
-                    ncap=$(get_cap)
-                    if [ "$ncap" -lt "$NIGHT_TARGET" ] 2>/dev/null; then
-                        night_suspended=0
-                    elif [ "$night_suspended" = "0" ]; then
-                        night_target_hit=1
-                    fi
-                fi
-                if [ "$temp_changed" = "1" ] || [ "$night_target_hit" = "1" ] || [ "$time_since_last" -ge "$recheck_after" ]; then
-                    log "Re-check (temp=$temp_changed hit=${night_target_hit}x, ${time_since_last}s since last) — full apply"
-                    sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
-                    last_full_apply_ts=$now_ts
-                    last_temp_raw=$current_temp_raw
-                    night_target_hit=0
-                    [ "${ncap:-0}" -ge "${NIGHT_TARGET:-999}" ] 2>/dev/null && night_suspended=1
-                fi
+                last_temp_raw=$current_temp_raw
+                night_target_hit=0
+                [ "${ncap:-0}" -ge "${NIGHT_TARGET:-999}" ] 2>/dev/null && night_suspended=1
             fi
-            ;;
-        *)
-            if [ "$last_status" = "Charging" ] || [ "$last_status" = "Full" ]; then
-                log "Charger disconnected — restoring thermal protection"
-                rm -f /data/adb/voltrix/fast_consent
-                sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
-                notify_card cancel
-            fi
-            ;;
-    esac
+        fi
+    else
+        if [ "$last_online" = "1" ]; then
+            log "Charger disconnected — restoring thermal protection"
+            rm -f /data/adb/voltrix/fast_consent
+            sh "$APPLY_SCRIPT" >> "$LOG" 2>&1
+            notify_card cancel
+        fi
+    fi
 
     # Refresh state.json — every charging cycle, idle only every 12th check
     # (~60s at the 5s idle poll) so the faster poll never hammers charge.sh.
-    if [ "$current_status" = "Charging" ] || [ "$current_status" = "Full" ] || [ $((checks % 12)) -eq 0 ]; then
+    if [ "$current_online" = "1" ] || [ $((checks % 12)) -eq 0 ]; then
         sh "$APPLY_SCRIPT" --state-only >> "$LOG" 2>&1
     fi
 
     last_status="$current_status"
+    last_online="$current_online"
     checks=$((checks + 1))
     [ $((checks % 200)) -eq 0 ] && { tail -300 "$LOG" > "$LOG.tmp" 2>/dev/null && mv "$LOG.tmp" "$LOG"; }
 done

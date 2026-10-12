@@ -130,6 +130,58 @@ discover() {
 get_status() { local v; v=$(rd "$BATT/status"); [ -n "$v" ] && echo "$v" || echo Unknown; }
 get_cap()    { local v; v=$(rd "$BATT/capacity"); [ -n "$v" ] && echo "$v" || echo 0; }
 get_temp()   { local t; t=$(to_num "$(rd "$BATT/temp")"); echo $((t/10)); }
+
+# Is a charger actually connected? Driven off the supply's own online flag,
+# never off battery status: while WE hold input_suspend the battery reports
+# "Not charging" even though the cable is still in, and a status-based
+# reading mistakes that for an unplug.
+get_online() {
+    local v
+    v=$(rd "$USB/online")
+    [ -z "$v" ] && [ -n "$UCSI" ] && v=$(rd "$UCSI/online")
+    if [ -z "$v" ]; then
+        # No supply node to ask — fall back to the battery's own words.
+        case "$(get_status)" in
+            Charging|Full) echo 1 ;;
+            *) echo 0 ;;
+        esac
+    else
+        echo "$v" | tr -cd '01' | head -c1
+    fi
+}
+
+# ------------------------------------------------------------------ suspend --
+# input_suspend is written by this script, so this script must also take it
+# back. It clears when the charger is not connected, when the limit is off
+# (or 100 — a full battery stops on its own, suspending there just looks
+# like a dead charge port), and past a 5% hysteresis below the limit.
+#
+# Before this, the write happened only inside `if CHARGE_LIMIT > 0`, so
+# switching the limit back off, or unplugging, left the input suspended and
+# the phone would not charge again until a reboot reset the driver. That is
+# the "reaches 100%, never charges again, reboot fixes it" report.
+sync_charge_suspend() {
+    [ "$AVAIL_SUSPEND" = "1" ] || return 0
+    local cur want=0 cap resume_at
+    cur=$(rd "$QB/input_suspend"); [ -z "$cur" ] && cur=0
+    if [ "$(get_online)" = "1" ] && [ "$CHARGE_LIMIT" -gt 0 ] 2>/dev/null && \
+       [ "$CHARGE_LIMIT" -lt 100 ] 2>/dev/null; then
+        cap=$(to_num "$(rd "$BATT/capacity")")
+        resume_at=$((CHARGE_LIMIT - 5)); [ "$resume_at" -lt 0 ] && resume_at=0
+        if [ "$cap" -ge "$CHARGE_LIMIT" ] 2>/dev/null; then
+            want=1
+        elif [ "$cap" -le "$resume_at" ] 2>/dev/null; then
+            want=0
+        else
+            want=$cur              # inside the hysteresis band: hold what we have
+        fi
+    fi
+    if [ "$want" != "$cur" ]; then
+        if safe_write "$QB/input_suspend" "$want"; then
+            log "SUSPEND: input_suspend $cur -> $want (limit=$CHARGE_LIMIT cap=$(get_cap) online=$(get_online))"
+        fi
+    fi
+}
 get_volt()   { local v; v=$(to_num "$(rd "$BATT/voltage_now")"); echo $((v/1000)); }
 get_curr()   { local c; c=$(to_num "$(rd "$BATT/current_now")"); echo "${c#-}"; }
 get_health() { local v; v=$(rd "$BATT/health"); [ -n "$v" ] && echo "$v" || echo Unknown; }
@@ -380,15 +432,7 @@ apply_settings() {
             ;;
     esac
 
-    if [ "$CHARGE_LIMIT" -gt 0 ] 2>/dev/null && [ "$AVAIL_SUSPEND" = "1" ]; then
-        local cap
-        cap=$(to_num "$(rd "$BATT/capacity")")
-        if [ "$cap" -ge "$CHARGE_LIMIT" ] 2>/dev/null; then
-            safe_write "$QB/input_suspend" "1"
-        else
-            safe_write "$QB/input_suspend" "0"
-        fi
-    fi
+    sync_charge_suspend
 
     log "=== Apply complete ==="
 }
@@ -465,6 +509,7 @@ write_state() {
   "thermal_hot_c": $THERMAL_HOT_C,
   "thermal_cool_c": $THERMAL_COOL_C,
   "thermal_gate_active": $([ "$(read_gate_state)" = "1" ] && echo true || echo false),
+  "fast_consent": $([ -f "$CFGDIR/fast_consent" ] && echo true || echo false),
   "charger_type_detected": "$(detect_charger_type)",
   "charger_info": $(charger_info_json),
   "level_calibration": "$(calibrate_level_direction)",
@@ -500,6 +545,10 @@ if [ "$CURRENT_STS" = "Charging" ] || [ "$CURRENT_STS" = "Full" ]; then
 else
     log "Not charging (status=$CURRENT_STS) — restoring thermal protection, skipping current writes"
     restore_thermal_protection_idle
+    # ...but the charge limit still owns input_suspend, and it must be
+    # released whenever the cable is gone. Without this the "off" branch
+    # never touched it and a suspended port stayed dead until reboot.
+    sync_charge_suspend
     write_state "idle"
 fi
 
